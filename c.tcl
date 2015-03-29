@@ -155,7 +155,6 @@ proc connected {fid} {
   if {[dict exists [chan configure $fid] -peername]} {
     puts "connected to [dict get [chan configure $fid] -peername]"
     set state open
-    sendTelnetCommand $fid [list $IAC $DO $ECHO]
   } else {
   }
 }
@@ -167,7 +166,6 @@ proc monitorFileClosed {fid} {
   if {[eof $fid]} {
     set state closed
   } else {
-    #puts "file still open"
     after 500 [list monitorFileClosed $fid]
   }
 }
