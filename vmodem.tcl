@@ -3,40 +3,53 @@
 set ThisScriptDir [file dirname [info script]]
 source [file join $ThisScriptDir c.tcl]
 
-proc validCmd {cmdLine} {
-  if {[regexp {(?i)^atd[tp]?.*$} $cmdLine]} {
-    return 1
-  } else {
-    return 0
-  }
+set phoneNumbers {
+  0 {localhost 1234}
+  1 {sdf.lonestar.org 23}
+  2 {particlesbbs.dyndns.org 6400}
+  3 {bbs.dmine.net 23}
 }
 
 
-localEcho off
-while {1} {
-  set line [gets stdin]
-  puts $line
-
-  if {[validCmd $line]} {
-    if {$line eq "atd0"} {
-      puts "OK"
-      set hostname localhost
-      set port 1234
-      set hostname "sdf.lonestar.org"
-      set port 23
-      #set hostname "particlesbbs.dyndns.org"
-      #set port 6400
-      #set hostname "bbs.dmine.net"
-      #set port 23
-#      set hostname "particlesbbs.dyndns.org"
-#      set port 6400
-      connect $hostname $port
-      serviceConnection
-      # TODO: Work out when to close connection
+proc dial {adtLine} {
+  global phoneNumbers
+  if {[regexp {(?i)^atd".*$} $adtLine]} { ; #"
+    set hostname [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\2}] ; #"
+    set port [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\3}] ; #"
+  } else {
+    set phoneNumber [regsub {(?i)^(atd[tp]?)(.*)$} $adtLine {\2}]
+    if {[dict exists $phoneNumbers $phoneNumber]} {
+      lassign [dict get $phoneNumbers $phoneNumber] hostname port
+    } else {
+      # TODO: Output no connect message
+      return
     }
   }
+
+  puts "OK"
+  connect $hostname $port
+  serviceConnection
+  # TODO: Work out when to close connection
 }
 
 
-localEcho on
+proc logMessage {error} {
+  set fid [open "/tmp/vmodem.log" a]
+  puts $fid $error
+  close $fid
+}
 
+try {
+  while {1} {
+    set line [gets stdin]
+    puts $line
+    switch -regexp $line {
+      {(?i)^atd[tp"]?.*$} { ;#"
+        dial $line
+      }
+    }
+  }
+} on error {result options} {
+  # TODO: This needs to be removed once all working
+  logMessage "result: $result\noptions: $options"
+}
