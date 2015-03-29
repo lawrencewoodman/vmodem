@@ -34,11 +34,38 @@ proc getDataIn {fid} {
 }
 
 
+proc makeTelnetCommandReadable {telnetCommand} {
+  set telnetCommandLength [llength $telnetCommand]
+  set codesMap {
+      1 ECHO
+     34 LINEMODE
+    251 WILL
+    252 WONT
+    253 DO
+    254 DONT
+    255 IAC
+  }
+
+  set humanReadableCommand ""
+
+  foreach b $telnetCommand {
+    if {[dict exists $codesMap $b]} {
+      set mneumonic [dict get $codesMap $b]
+      append humanReadableCommand "$mneumonic "
+    } else {
+      append humanReadableCommand "$b "
+    }
+  }
+
+  append humanReadableCommand "($telnetCommand)"
+}
+
+
 proc handleTelnetCommand {fid} {
   global telnetCommand
-#puts "handleTelnetCommand - command: $telnetCommand"
   set optionCodes {251 252 253 254}
   set telnetCommandLength [llength $telnetCommand]
+  set humanReadableCommand [makeTelnetCommandReadable $telnetCommand]
 
   set WILL 251
   set WONT 252
@@ -50,19 +77,25 @@ proc handleTelnetCommand {fid} {
 
   if {$telnetCommandLength > 1} {
     set byte2 [lindex $telnetCommand 1]
-    if {$byte2 in $optionCodes} {
+    if {$byte2 == $IAC} {
+      puts "handleTelnetCommand - command: $humanReadableCommand"
+      # IAC escapes IAC, so if you want to send or receive 255 then you need to
+      # send IAC twice
+      if {[catch {puts -nonewline $fid $ch}]} {
+        set state closed
+      }
+      set telnetCommand [list]
+    } elseif {$byte2 in $optionCodes} {
       if {$telnetCommandLength == 3} {
-        puts "telnetCommandIn: $telnetCommand - byte2: $byte2"
+        puts "handleTelnetCommand - command: $humanReadableCommand"
         set option [lindex $telnetCommand 2]
         if {$byte2 == $WILL} {
-           puts "WILL: $WILL"
            if {$option == $ECHO} {
              sendTelnetCommand $fid [list $IAC $DO $ECHO]
            } else {
              sendTelnetCommand $fid [list $IAC $DONT $option]
            }
-         } elseif {$byte2 == $DO} {
-           puts "do command in option: $option - sending wont"
+         } elseif {$byte2 == $DO || $byte2 == $DONT} {
            sendTelnetCommand $fid [list $IAC $WONT $option]
          }
         set telnetCommand [list]
@@ -76,11 +109,11 @@ proc handleTelnetCommand {fid} {
 
 proc sendTelnetCommand {fid telnetCommand} {
   global state
-puts "sendTelnetCommand - command: $telnetCommand"
+  puts "sendTelnetCommand   - command: [makeTelnetCommandReadable $telnetCommand]"
 
   set binaryData [binary format c3 $telnetCommand]
   if {[catch {puts -nonewline $fid $binaryData}]} {
-    puts "sendTElnetCommand - closing"
+    puts "sendTelnetCommand - closing"
     set state closed
   }
 }
@@ -88,15 +121,25 @@ puts "sendTelnetCommand - command: $telnetCommand"
 
 proc sendDataOut {fid} {
   global state
+  set IAC 255
+  set LF 0x0A
+  set CR 0x0D
 
-  if {[catch {read stdin} ch]} {
+  if {[catch {read stdin} dataFromStdin]} {
     puts "sendByte: read catch"
   }
 
-  #puts "sendByte - sending: $ch"
-
-  if {[catch {puts -nonewline $fid $ch}]} {
-    set state closed
+  foreach dataOut [split $dataFromStdin {}] {
+    binary scan $dataOut c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    if {$unsignedByte == $IAC} {
+      set dataOut [binary format c2 [list $IAC $IAC]]
+    } elseif {0 && $unsignedByte == $LF} { # TODO: Add crlf switch
+      set dataOut [binary format c2 [list $CR $LF]]
+    }
+    if {[catch {puts -nonewline $fid $dataOut}]} {
+      set state closed
+    }
   }
 }
 
