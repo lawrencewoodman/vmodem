@@ -1,13 +1,7 @@
-source "c.tcl"
-set state closed
+#! /usr/bin/env tclsh
 
-proc localEcho {state} {
-  if {$state} {
-    exec stty echo
-  } else {
-     exec stty -echo
-   }
-}
+set ThisScriptDir [file dirname [info script]]
+source [file join $ThisScriptDir c.tcl]
 
 proc validCmd {cmdLine} {
   if {[regexp {(?i)^atd[tp]?.*$} $cmdLine]} {
