@@ -1,16 +1,40 @@
-set state closed
-set telnetCommand [list]
-
-# telnet: http://tools.ietf.org/html/rfc854
-
-
-proc telnetCommandNameToCode {telnetCommandName} {
-  string map {WILL 251 WON'T 252 DO 253 DON'T 254 IAC 255} $telnetCommandName
+# Telnet Protocol Specification: http://tools.ietf.org/html/rfc854
+namespace eval telnet {
+  variable state closed
+  variable telnetCommand [list]
 }
 
 
-proc getDataIn {fid} {
-  global telnetCommand
+proc telnet::serviceConnection {} {
+  variable state
+
+  while {$state ne "closed"} {
+    vwait state
+  }
+}
+
+
+proc telnet::connect {hostname port} {
+  variable state
+  set state connecting
+
+  set fid [socket -async $hostname $port]
+  chan configure $fid -translation binary -blocking 0 -buffering none
+  chan configure stdin -translation binary -blocking 0 -buffering none
+  chan configure stdout -translation binary -blocking 0 -buffering none
+  chan event $fid writable [list ::telnet::Connected $fid]
+  chan event $fid readable [list ::telnet::ReceiveFromRemote $fid]
+  chan event stdin readable [list ::telnet::SendToRemote $fid]
+  MonitorFileClosed $fid
+}
+
+
+############################
+# Internal Commands
+############################
+
+proc telnet::ReceiveFromRemote {fid} {
+  variable telnetCommand
 
   set IAC 255
   if {[catch {read $fid} dataIn]} {
@@ -27,14 +51,14 @@ proc getDataIn {fid} {
         }
       } else {
         lappend telnetCommand $unsignedByte
-        handleTelnetCommand $fid
+        HandleTelnetCommand $fid
       }
     }
   }
 }
 
 
-proc makeTelnetCommandReadable {telnetCommand} {
+proc telnet::MakeTelnetCommandReadable {telnetCommand} {
   set telnetCommandLength [llength $telnetCommand]
   set codesMap {
       1 ECHO
@@ -61,11 +85,11 @@ proc makeTelnetCommandReadable {telnetCommand} {
 }
 
 
-proc handleTelnetCommand {fid} {
-  global telnetCommand
+proc telnet::HandleTelnetCommand {fid} {
+  variable telnetCommand
   set optionCodes {251 252 253 254}
   set telnetCommandLength [llength $telnetCommand]
-  set humanReadableCommand [makeTelnetCommandReadable $telnetCommand]
+  set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
 
   set WILL 251
   set WONT 252
@@ -91,12 +115,12 @@ proc handleTelnetCommand {fid} {
         set option [lindex $telnetCommand 2]
         if {$byte2 == $WILL} {
            if {$option == $ECHO} {
-             sendTelnetCommand $fid [list $IAC $DO $ECHO]
+             SendTelnetCommand $fid [list $IAC $DO $ECHO]
            } else {
-             sendTelnetCommand $fid [list $IAC $DONT $option]
+             SendTelnetCommand $fid [list $IAC $DONT $option]
            }
          } elseif {$byte2 == $DO || $byte2 == $DONT} {
-           sendTelnetCommand $fid [list $IAC $WONT $option]
+           SendTelnetCommand $fid [list $IAC $WONT $option]
          }
         set telnetCommand [list]
       }
@@ -107,9 +131,9 @@ proc handleTelnetCommand {fid} {
 }
 
 
-proc sendTelnetCommand {fid telnetCommand} {
-  global state
-  puts "sendTelnetCommand   - command: [makeTelnetCommandReadable $telnetCommand]"
+proc telnet::SendTelnetCommand {fid telnetCommand} {
+  variable state
+  puts "sendTelnetCommand   - command: [MakeTelnetCommandReadable $telnetCommand]"
 
   set binaryData [binary format c3 $telnetCommand]
   if {[catch {puts -nonewline $fid $binaryData}]} {
@@ -119,8 +143,8 @@ proc sendTelnetCommand {fid telnetCommand} {
 }
 
 
-proc sendDataOut {fid} {
-  global state
+proc telnet::SendToRemote {fid} {
+  variable state
   set IAC 255
   set LF 0x0A
   set CR 0x0D
@@ -144,8 +168,8 @@ proc sendDataOut {fid} {
 }
 
 
-proc connected {fid} {
-  global state
+proc telnet::Connected {fid} {
+  variable state
   set DO 253
   set IAC 255
   set ECHO 1
@@ -160,36 +184,12 @@ proc connected {fid} {
 }
 
 
-proc monitorFileClosed {fid} {
-  global state
+proc telnet::MonitorFileClosed {fid} {
+  variable state
 
   if {[eof $fid]} {
     set state closed
   } else {
-    after 500 [list monitorFileClosed $fid]
+    after 500 [list ::telnet::MonitorFileClosed $fid]
   }
-}
-
-
-proc serviceConnection {} {
-  global state
-
-  while {$state ne "closed"} {
-    vwait state
-  }
-}
-
-
-proc connect {hostname port} {
-  global state
-  set state connecting
-
-  set fid [socket -async $hostname $port]
-  chan configure $fid -translation binary -blocking 0 -buffering none
-  chan configure stdin -translation binary -blocking 0 -buffering none
-  chan configure stdout -translation binary -blocking 0 -buffering none
-  chan event $fid writable [list connected $fid]
-  chan event $fid readable [list getDataIn $fid]
-  chan event stdin readable [list sendDataOut $fid]
-  monitorFileClosed $fid
 }

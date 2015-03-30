@@ -1,7 +1,8 @@
 #! /usr/bin/env tclsh
 
 set ThisScriptDir [file dirname [info script]]
-source [file join $ThisScriptDir c.tcl]
+set LibDir [file join $ThisScriptDir lib]
+source [file join $LibDir telnet.tcl]
 
 set phoneNumbers {
   0 {localhost 1234}
@@ -27,8 +28,8 @@ proc dial {adtLine} {
   }
 
   puts "OK"
-  connect $hostname $port
-  serviceConnection
+  telnet::connect $hostname $port
+  telnet::serviceConnection
   # TODO: Work out when to close connection
 }
 
