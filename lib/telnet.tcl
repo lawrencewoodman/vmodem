@@ -1,6 +1,9 @@
 # Telnet Protocol Specification: http://tools.ietf.org/html/rfc854
 namespace eval telnet {
   variable state closed
+  variable oldStdinConfig
+  variable oldStdoutConfig
+  variable oldStdinReadableEventScript
   variable telnetCommand [list]
 }
 
@@ -9,14 +12,23 @@ proc telnet::serviceConnection {} {
   variable state
 
   while {$state ne "closed"} {
-    vwait state
+    vwait ::telnet::state
   }
 }
 
 
 proc telnet::connect {hostname port} {
   variable state
+  variable oldStdinConfig
+  variable oldStdoutConfig
+  variable oldStdinReadableEventScript
+
   set state connecting
+  set oldStdinConfig [chan configure stdin]
+  set oldStdoutConfig [chan configure stdout]
+  set oldStdinReadableEventScript [
+    chan event stdin readable
+  ]
 
   set fid [socket -async $hostname $port]
   chan configure $fid -translation binary -blocking 0 -buffering none
@@ -25,7 +37,6 @@ proc telnet::connect {hostname port} {
   chan event $fid writable [list ::telnet::Connected $fid]
   chan event $fid readable [list ::telnet::ReceiveFromRemote $fid]
   chan event stdin readable [list ::telnet::SendToRemote $fid]
-  MonitorFileClosed $fid
 }
 
 
@@ -33,12 +44,28 @@ proc telnet::connect {hostname port} {
 # Internal Commands
 ############################
 
+proc telnet::Close {fid} {
+  variable state
+  variable oldStdinConfig
+  variable oldStdoutConfig
+  variable oldStdinReadableEventScript
+
+  if {$state ne "closed"} {
+    close $fid
+    chan configure stdin {*}$oldStdinConfig
+    chan configure stdout {*}$oldStdoutConfig
+    chan event stdin readable $oldStdinReadableEventScript
+    set state closed
+  }
+}
+
 proc telnet::ReceiveFromRemote {fid} {
   variable telnetCommand
 
   set IAC 255
-  if {[catch {read $fid} dataIn]} {
-    set state closed
+  if {[catch {read $fid} dataIn] || $dataIn eq ""} {
+    Close $fid
+    logger::log notice "Couldn't read from remote host, closing connection"
   } else {
     foreach ch [split $dataIn {}] {
       binary scan $ch c signedByte
@@ -54,7 +81,23 @@ proc telnet::ReceiveFromRemote {fid} {
         HandleTelnetCommand $fid
       }
     }
+    logger::eval info {
+      set msg "Received data: [DumpBytes $dataIn]"
+    }
   }
+}
+
+
+proc telnet::DumpBytes {bytes} {
+  set dump "$bytes ("
+
+  foreach ch [split $bytes {}] {
+    binary scan $ch c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    lappend dump [format {%x} $unsignedByte]
+  }
+
+  return "$dump)"
 }
 
 
@@ -102,16 +145,17 @@ proc telnet::HandleTelnetCommand {fid} {
   if {$telnetCommandLength > 1} {
     set byte2 [lindex $telnetCommand 1]
     if {$byte2 == $IAC} {
-      puts "handleTelnetCommand - command: $humanReadableCommand"
+      logger::log info "Received telnet command: $humanReadableCommand"
       # IAC escapes IAC, so if you want to send or receive 255 then you need to
       # send IAC twice
       if {[catch {puts -nonewline $fid $ch}]} {
-        set state closed
+        Close $fid
+        logger::log notice "Couldn't write to remote host, closing connection"
       }
       set telnetCommand [list]
     } elseif {$byte2 in $optionCodes} {
       if {$telnetCommandLength == 3} {
-        puts "handleTelnetCommand - command: $humanReadableCommand"
+        logger::log info "Received telnet command: $humanReadableCommand"
         set option [lindex $telnetCommand 2]
         if {$byte2 == $WILL} {
            if {$option == $ECHO} {
@@ -133,12 +177,16 @@ proc telnet::HandleTelnetCommand {fid} {
 
 proc telnet::SendTelnetCommand {fid telnetCommand} {
   variable state
-  puts "sendTelnetCommand   - command: [MakeTelnetCommandReadable $telnetCommand]"
+
+  logger::eval info {
+    set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
+    set msg "Sending telnet command:  $humanReadableCommand"
+  }
 
   set binaryData [binary format c3 $telnetCommand]
   if {[catch {puts -nonewline $fid $binaryData}]} {
-    puts "sendTelnetCommand - closing"
-    set state closed
+    Close $fid
+    logger::log notice "Couldn't write to remote host, closing connection"
   }
 }
 
@@ -150,7 +198,7 @@ proc telnet::SendToRemote {fid} {
   set CR 0x0D
 
   if {[catch {read stdin} dataFromStdin]} {
-    puts "sendByte: read catch"
+    logger::log error "Couldn't read from stdin"
   }
 
   foreach dataOut [split $dataFromStdin {}] {
@@ -162,7 +210,8 @@ proc telnet::SendToRemote {fid} {
       set dataOut [binary format c2 [list $CR $LF]]
     }
     if {[catch {puts -nonewline $fid $dataOut}]} {
-      set state closed
+      Close $fid
+      logger::log notice "Couldn't write to remote host, closing connection"
     }
   }
 }
@@ -177,19 +226,8 @@ proc telnet::Connected {fid} {
   chan event $fid writable {}
 
   if {[dict exists [chan configure $fid] -peername]} {
-    puts "connected to [dict get [chan configure $fid] -peername]"
+    set peername [dict get [chan configure $fid] -peername]
+    logger::log info "Connected to $peername"
     set state open
-  } else {
-  }
-}
-
-
-proc telnet::MonitorFileClosed {fid} {
-  variable state
-
-  if {[eof $fid]} {
-    set state closed
-  } else {
-    after 500 [list ::telnet::MonitorFileClosed $fid]
   }
 }
