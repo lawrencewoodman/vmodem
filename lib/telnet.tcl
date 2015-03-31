@@ -206,8 +206,6 @@ proc telnet::SendToRemote {fid} {
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $IAC} {
       set dataOut [binary format c2 [list $IAC $IAC]]
-    } elseif {0 && $unsignedByte == $LF} { # TODO: Add crlf switch
-      set dataOut [binary format c2 [list $CR $LF]]
     }
     if {[catch {puts -nonewline $fid $dataOut}]} {
       Close $fid
