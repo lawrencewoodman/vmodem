@@ -8,15 +8,6 @@ namespace eval telnet {
 }
 
 
-proc telnet::serviceConnection {} {
-  variable state
-
-  while {$state ne "closed"} {
-    vwait ::telnet::state
-  }
-}
-
-
 proc telnet::connect {hostname port} {
   variable state
   variable oldStdinConfig
@@ -37,6 +28,10 @@ proc telnet::connect {hostname port} {
   chan event $fid writable [list ::telnet::Connected $fid]
   chan event $fid readable [list ::telnet::ReceiveFromRemote $fid]
   chan event stdin readable [list ::telnet::SendToRemote $fid]
+
+  while {$state ne "closed"} {
+    vwait ::telnet::state
+  }
 }
 
 
@@ -226,6 +221,7 @@ proc telnet::Connected {fid} {
   if {[dict exists [chan configure $fid] -peername]} {
     set peername [dict get [chan configure $fid] -peername]
     logger::log info "Connected to $peername"
+    puts "CONNECT $::modem::speed"
     set state open
   }
 }
