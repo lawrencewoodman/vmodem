@@ -84,12 +84,28 @@ proc telnet::ReceiveFromRemote {fid} {
 
 
 proc telnet::DumpBytes {bytes} {
-  set dump "$bytes ("
+  set byteNum 0
 
   foreach ch [split $bytes {}] {
+    if {[string is print $ch]} {
+      append dump $ch
+    } else {
+      append dump "."
+    }
+  }
+
+  append dump " "
+
+  foreach ch [split $bytes {}] {
+    if {$byteNum == 0} {
+      append dump "("
+    } else {
+      append dump " "
+    }
     binary scan $ch c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
-    lappend dump [format {%x} $unsignedByte]
+    append dump [format {%02x} $unsignedByte]
+    incr byteNum
   }
 
   return "$dump)"
