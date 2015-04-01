@@ -1,5 +1,4 @@
 #! /usr/bin/env tclsh
-package require log
 package require cmdline
 
 set ThisScriptDir [file dirname [info script]]
