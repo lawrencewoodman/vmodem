@@ -221,7 +221,12 @@ proc telnet::SendToRemote {fid} {
     if {[catch {puts -nonewline $fid $dataOut}]} {
       Close $fid
       logger::log notice "Couldn't write to remote host, closing connection"
+      return
     }
+  }
+
+  logger::eval info {
+    set msg "Sent data: [DumpBytes $dataFromStdin]"
   }
 }
 
