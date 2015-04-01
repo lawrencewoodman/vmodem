@@ -58,6 +58,8 @@ proc telnet::ReceiveFromRemote {fid} {
   variable telnetCommand
 
   set IAC 255
+  set isTelnetCommand 0
+
   if {[catch {read $fid} dataIn] || $dataIn eq ""} {
     Close $fid
     logger::log notice "Couldn't read from remote host, closing connection"
@@ -68,16 +70,20 @@ proc telnet::ReceiveFromRemote {fid} {
       if {[llength $telnetCommand] == 0} {
         if {$unsignedByte == $IAC} {
           lappend telnetCommand $unsignedByte
+          set isTelnetCommand 1
         } else {
           puts -nonewline $ch
         }
       } else {
         lappend telnetCommand $unsignedByte
         HandleTelnetCommand $fid
+        set isTelnetCommand 1
       }
     }
     logger::eval info {
-      set msg "Received data: [DumpBytes $dataIn]"
+      if {!$isTelnetCommand} {
+        set msg "Received data: [DumpBytes $dataIn]"
+      }
     }
   }
 }
