@@ -82,39 +82,10 @@ proc telnet::ReceiveFromRemote {fid} {
     }
     logger::eval info {
       if {!$isTelnetCommand} {
-        set msg "Received data: [DumpBytes $dataIn]"
+        set msg "Received data: [::logger::dumpBytes $dataIn]"
       }
     }
   }
-}
-
-
-proc telnet::DumpBytes {bytes} {
-  set byteNum 0
-
-  foreach ch [split $bytes {}] {
-    if {[string is print $ch]} {
-      append dump $ch
-    } else {
-      append dump "."
-    }
-  }
-
-  append dump " "
-
-  foreach ch [split $bytes {}] {
-    if {$byteNum == 0} {
-      append dump "("
-    } else {
-      append dump " "
-    }
-    binary scan $ch c signedByte
-    set unsignedByte [expr {$signedByte & 0xff}]
-    append dump [format {%02x} $unsignedByte]
-    incr byteNum
-  }
-
-  return "$dump)"
 }
 
 
@@ -232,7 +203,7 @@ proc telnet::SendToRemote {fid} {
   }
 
   logger::eval info {
-    set msg "Sent data: [DumpBytes $dataFromStdin]"
+    set msg "Sent data: [::logger::dumpBytes $dataFromStdin]"
   }
 }
 
@@ -248,6 +219,7 @@ proc telnet::Connected {fid} {
   if {[dict exists [chan configure $fid] -peername]} {
     set peername [dict get [chan configure $fid] -peername]
     logger::log info "Connected to $peername"
+    ::modem::changeMode "on-line"
     puts "CONNECT $::modem::speed"
     set state open
   }

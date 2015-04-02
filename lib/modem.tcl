@@ -1,26 +1,31 @@
 namespace eval modem {
+  variable mode "off"
+  variable line ""
   variable speed 1200
 }
 
 
 proc modem::emulateModem {} {
+  variable mode
+
   set problem [
     catch {
-      while {1} {
-        logger::log info "Waiting for modem command"
-        set line [gets stdin]
-        puts $line
-        switch -regexp $line {
-          {(?i)^atd[tp"]?.*$} { ;#"
-            Dial $line
-          }
-        }
+      chan configure stdin -translation binary -blocking 0 -buffering none
+      chan configure stdout -translation binary -blocking 0 -buffering none
+      chan event stdin readable [list ::modem::ReceiveFromStdin]
+
+      changeMode "command"
+      while {$mode ne "off"} {
+        vwait ::modem::mode
       }
     } result options
   ]
 
   if {$problem} {
     logger::log critical "result: $result\noptions: $options"
+    # report the error with original details
+    dict unset options -level
+    return -options $options $result
   }
 
   # TODO: Trap signls so that can close neatly
@@ -28,9 +33,47 @@ proc modem::emulateModem {} {
 }
 
 
+proc modem::changeMode {newMode} {
+  variable mode
+
+  if {$mode ne $newMode} {
+    logger::log info "Entering $newMode mode"
+    set mode $newMode
+  }
+}
+
+
 ########################
 # Internal Commands
 ########################
+proc modem::ProcessLine {} {
+  variable line
+
+  set line [string trim $line]
+  if {$line ne ""} {
+    puts ""
+
+    logger::eval info {
+      set msg "Received line: [::logger::dumpBytes $line]"
+    }
+
+    switch -regexp $line {
+      {(?i)^atd[tp"]?.*$} { ;#"
+        Dial $line
+        ::modem::changeMode "command"
+      }
+
+      {(?i)^at.*$} {
+        # Acknowledge but ignore any other AT command
+        puts "OK"
+      }
+    }
+  }
+
+  set line ""
+}
+
+
 proc modem::Dial {adtLine} {
   variable speed
   global phoneNumbers
@@ -59,4 +102,36 @@ proc modem::Dial {adtLine} {
   puts "OK"
   telnet::connect $hostname $port
   puts "NO CARRIER"
+}
+
+
+proc modem::ReceiveFromStdin {} {
+  variable line
+
+  set LF 0x0A
+  set CR 0x0D
+
+  if {[catch {read stdin} dataFromStdin]} {
+    logger::log error "Couldn't read from stdin"
+    return
+  }
+
+  foreach ch [split $dataFromStdin {}] {
+    logger::eval info {
+      set msg "Received bytes: [::logger::dumpBytes $dataFromStdin]"
+    }
+    binary scan $ch c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    if {$unsignedByte == $LF || $unsignedByte == $CR} {
+      ProcessLine
+    } else {
+      append line $ch
+    }
+
+  }
+
+  if {[catch {puts -nonewline $dataFromStdin}]} {
+    logger::log error "Couldn't write to stdout"
+    return
+  }
 }

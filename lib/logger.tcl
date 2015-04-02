@@ -40,3 +40,32 @@ proc logger::eval {level script} {
   set result [uplevel 1 $script]
   log $level $result
 }
+
+
+proc logger::dumpBytes {bytes} {
+  set byteNum 0
+
+  foreach ch [split $bytes {}] {
+    if {[string is print $ch]} {
+      append dump $ch
+    } else {
+      append dump "."
+    }
+  }
+
+  append dump " "
+
+  foreach ch [split $bytes {}] {
+    if {$byteNum == 0} {
+      append dump "("
+    } else {
+      append dump " "
+    }
+    binary scan $ch c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    append dump [format {%02x} $unsignedByte]
+    incr byteNum
+  }
+
+  return "$dump)"
+}
