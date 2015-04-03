@@ -44,8 +44,50 @@ proc logger::eval {level script} {
 
 proc logger::dumpBytes {bytes} {
   set byteNum 0
+  set numBytes [llength $bytes]
+  set dump ""
 
-  foreach ch [split $bytes {}] {
+  for {set byteNum 0} {$byteNum < $numBytes} {incr byteNum 16} {
+    set next16Bytes [lrange $bytes $byteNum $byteNum+15]
+    set line [
+      format {    0x%04X:  %-40s %s} \
+             $byteNum \
+             [DumpHexBytes $next16Bytes] \
+             [DumpASCIIBytes $next16Bytes]
+    ]
+    append dump "$line\n"
+  }
+
+  return [string trimright $dump]
+}
+
+
+
+######################
+# Internal commands
+######################
+proc logger::DumpHexBytes {bytes} {
+  set byteNum 0
+  set dump ""
+
+  foreach ch $bytes {
+    binary scan $ch c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    append dump [format {%02x} $unsignedByte]
+    if {$byteNum % 2 == 1} {
+      append dump " "
+    }
+    incr byteNum
+  }
+
+  return $dump
+}
+
+
+proc logger::DumpASCIIBytes {bytes} {
+  set dump ""
+
+  foreach ch $bytes {
     if {[string is print $ch]} {
       append dump $ch
     } else {
@@ -53,19 +95,5 @@ proc logger::dumpBytes {bytes} {
     }
   }
 
-  append dump " "
-
-  foreach ch [split $bytes {}] {
-    if {$byteNum == 0} {
-      append dump "("
-    } else {
-      append dump " "
-    }
-    binary scan $ch c signedByte
-    set unsignedByte [expr {$signedByte & 0xff}]
-    append dump [format {%02x} $unsignedByte]
-    incr byteNum
-  }
-
-  return "$dump)"
+  return $dump
 }

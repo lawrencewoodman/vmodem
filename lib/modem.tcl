@@ -54,7 +54,8 @@ proc modem::ProcessLine {} {
     puts ""
 
     logger::eval info {
-      set msg "Received line: [::logger::dumpBytes $line]"
+      set bytes [split $line {}]
+      set msg "Received line:\n[::logger::dumpBytes $bytes]"
     }
 
     switch -regexp $line {
@@ -116,9 +117,11 @@ proc modem::ReceiveFromStdin {} {
     return
   }
 
-  foreach ch [split $dataFromStdin {}] {
+  set bytesFromStdin [split $dataFromStdin {}]
+
+  foreach ch $bytesFromStdin {
     logger::eval info {
-      set msg "Received bytes: [::logger::dumpBytes $dataFromStdin]"
+      set msg "Received bytes:\n[::logger::dumpBytes $bytesFromStdin]"
     }
     binary scan $ch c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]

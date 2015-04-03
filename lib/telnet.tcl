@@ -58,32 +58,28 @@ proc telnet::ReceiveFromRemote {fid} {
   variable telnetCommand
 
   set IAC 255
-  set isTelnetCommand 0
 
   if {[catch {read $fid} dataIn] || $dataIn eq ""} {
     Close $fid
     logger::log notice "Couldn't read from remote host, closing connection"
   } else {
-    foreach ch [split $dataIn {}] {
+    set bytesIn [split $dataIn {}]
+    foreach ch $bytesIn {
       binary scan $ch c signedByte
       set unsignedByte [expr {$signedByte & 0xff}]
       if {[llength $telnetCommand] == 0} {
         if {$unsignedByte == $IAC} {
           lappend telnetCommand $unsignedByte
-          set isTelnetCommand 1
         } else {
           puts -nonewline $ch
         }
       } else {
         lappend telnetCommand $unsignedByte
         HandleTelnetCommand $fid
-        set isTelnetCommand 1
       }
     }
     logger::eval info {
-      if {!$isTelnetCommand} {
-        set msg "Received data: [::logger::dumpBytes $dataIn]"
-      }
+      set msg "Received data:\n[::logger::dumpBytes $bytesIn]"
     }
   }
 }
@@ -184,16 +180,22 @@ proc telnet::SendToRemote {fid} {
   set IAC 255
   set LF 0x0A
   set CR 0x0D
+  set dataSent [list]
 
   if {[catch {read stdin} dataFromStdin]} {
     logger::log error "Couldn't read from stdin"
   }
 
-  foreach dataOut [split $dataFromStdin {}] {
+  set bytesFromStdin [split $dataFromStdin {}]
+
+  foreach dataOut $bytesFromStdin {
     binary scan $dataOut c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $IAC} {
       set dataOut [binary format c2 [list $IAC $IAC]]
+      lappend dataSent {*}$dataOut
+    } else {
+      lappend dataSent $dataOut
     }
     if {[catch {puts -nonewline $fid $dataOut}]} {
       Close $fid
@@ -203,7 +205,9 @@ proc telnet::SendToRemote {fid} {
   }
 
   logger::eval info {
-    set msg "Sent data: [::logger::dumpBytes $dataFromStdin]"
+    if {[llength $dataSent] > 0} {
+      set msg "Sent data:\n[::logger::dumpBytes $dataSent]"
+    }
   }
 }
 
