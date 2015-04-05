@@ -4,7 +4,7 @@ namespace eval telnet {
   variable oldStdinConfig
   variable oldStdoutConfig
   variable oldStdinReadableEventScript
-  variable telnetCommand [list]
+  variable telnetCommandIn [list]
 }
 
 
@@ -55,7 +55,7 @@ proc telnet::Close {fid} {
 }
 
 proc telnet::ReceiveFromRemote {fid} {
-  variable telnetCommand
+  variable telnetCommandIn
 
   set IAC 255
 
@@ -64,23 +64,34 @@ proc telnet::ReceiveFromRemote {fid} {
     logger::log notice "Couldn't read from remote host, closing connection"
   } else {
     set bytesIn [split $dataIn {}]
+
+    logger::eval info {
+      set numBytes [llength $bytesIn]
+      if {$numBytes > 0} {
+        set msg "remote > local: length $numBytes"
+      }
+    }
+
     foreach ch $bytesIn {
       binary scan $ch c signedByte
       set unsignedByte [expr {$signedByte & 0xff}]
-      if {[llength $telnetCommand] == 0} {
+      if {[llength $telnetCommandIn] == 0} {
         if {$unsignedByte == $IAC} {
-          lappend telnetCommand $unsignedByte
+          lappend telnetCommandIn $unsignedByte
         } else {
           puts -nonewline $ch
         }
       } else {
-        lappend telnetCommand $unsignedByte
+        lappend telnetCommandIn $unsignedByte
         HandleTelnetCommand $fid
       }
     }
-    logger::eval info {
-      set msg "Received data:\n[::logger::dumpBytes $bytesIn]"
+
+    logger::eval -noheader {
+      ::logger::dumpBytes $bytesIn
     }
+
+    SendTelnetCommands $fid
   }
 }
 
@@ -112,12 +123,8 @@ proc telnet::MakeTelnetCommandReadable {telnetCommand} {
 }
 
 
-proc telnet::HandleTelnetCommand {fid} {
-  variable telnetCommand
-  set optionCodes {251 252 253 254}
-  set telnetCommandLength [llength $telnetCommand]
-  set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
-
+proc telnet::NegotiateTelnetOptions {fid command option} {
+  variable telnetCommandsOut
   set WILL 251
   set WONT 252
   set DO 253
@@ -126,61 +133,89 @@ proc telnet::HandleTelnetCommand {fid} {
 
   set ECHO 1
 
-  if {$telnetCommandLength > 1} {
-    set byte2 [lindex $telnetCommand 1]
+  if {$command == $WILL} {
+    if {$option == $ECHO} {
+      lappend telnetCommandsOut [list $IAC $DO $ECHO]
+    } else {
+      lappend telnetCommandsOut [list $IAC $DONT $option]
+    }
+  } elseif {$command == $DO || $byte2 == $DONT} {
+    lappend telnetCommandsOut [list $IAC $WONT $option]
+  }
+}
+
+
+proc telnet::HandleTelnetCommand {fid} {
+  variable telnetCommandIn
+  set commandCodes {251 252 253 254}
+  set telnetCommandInLength [llength $telnetCommandIn]
+  set humanReadableCommand [MakeTelnetCommandReadable $telnetCommandIn]
+
+  set IAC 255
+
+  if {$telnetCommandInLength > 1} {
+    set byte2 [lindex $telnetCommandIn 1]
     if {$byte2 == $IAC} {
-      logger::log info "Received telnet command: $humanReadableCommand"
+      logger::log -noheader "    Telnet command: $humanReadableCommand"
       # IAC escapes IAC, so if you want to send or receive 255 then you need to
       # send IAC twice
-      if {[catch {puts -nonewline $fid $ch}]} {
-        Close $fid
-        logger::log notice "Couldn't write to remote host, closing connection"
-      }
-      set telnetCommand [list]
-    } elseif {$byte2 in $optionCodes} {
-      if {$telnetCommandLength == 3} {
-        logger::log info "Received telnet command: $humanReadableCommand"
-        set option [lindex $telnetCommand 2]
-        if {$byte2 == $WILL} {
-           if {$option == $ECHO} {
-             SendTelnetCommand $fid [list $IAC $DO $ECHO]
-           } else {
-             SendTelnetCommand $fid [list $IAC $DONT $option]
-           }
-         } elseif {$byte2 == $DO || $byte2 == $DONT} {
-           SendTelnetCommand $fid [list $IAC $WONT $option]
-         }
-        set telnetCommand [list]
+      set binaryIAC [binary format c $IAC]
+      puts -nonewline $binaryIAC
+      set telnetCommandIn [list]
+    } elseif {$byte2 in $commandCodes} {
+      if {$telnetCommandInLength == 3} {
+        logger::log -noheader "    Telnet command: $humanReadableCommand"
+        set option [lindex $telnetCommandIn 2]
+        NegotiateTelnetOptions $fid $byte2 $option
+        set telnetCommandIn [list]
       }
     } else {
-      set telnetCommand [list]
+      set telnetCommandIn [list]
     }
   }
 }
 
 
-proc telnet::SendTelnetCommand {fid telnetCommand} {
-  variable state
 
-  logger::eval info {
-    set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
-    set msg "Sending telnet command:  $humanReadableCommand"
+proc telnet::SendTelnetCommands {fid} {
+  variable telnetCommandsOut
+  set dataSent [list]
+  set numBytesToSend [llength [concat {*}$telnetCommandsOut]]
+
+  if {$numBytesToSend == 0} {return}
+  logger::log info "local > remote: length $numBytesToSend"
+
+  foreach telnetCommand $telnetCommandsOut {
+    set binaryData [binary format c* $telnetCommand]
+
+    logger::eval -noheader {
+      set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
+      set msg "    Telnet command: $humanReadableCommand"
+    }
+
+    if {[catch {puts -nonewline $fid $binaryData}]} {
+      Close $fid
+      logger::log notice "Couldn't write to remote host, closing connection"
+    } else {
+      lappend dataSent {*}[split $binaryData {}]
+    }
   }
 
-  set binaryData [binary format c3 $telnetCommand]
-  if {[catch {puts -nonewline $fid $binaryData}]} {
-    Close $fid
-    logger::log notice "Couldn't write to remote host, closing connection"
+  logger::eval -noheader {
+    ::logger::dumpBytes $dataSent
   }
+
+  set telnetCommandsOut [list]
 }
 
 
 proc telnet::SendToRemote {fid} {
-  variable state
+  variable telnetCommandsOut
   set IAC 255
   set LF 0x0A
   set CR 0x0D
   set dataSent [list]
+  set numEscapedIAC 0
 
   if {[catch {read stdin} dataFromStdin]} {
     logger::log error "Couldn't read from stdin"
@@ -188,26 +223,42 @@ proc telnet::SendToRemote {fid} {
 
   set bytesFromStdin [split $dataFromStdin {}]
 
+  logger::eval info {
+    set numBytes [llength $bytesFromStdin]
+    if {$numBytes > 0} {
+      set msg "local > remote: length $numBytes"
+    }
+  }
+
   foreach dataOut $bytesFromStdin {
     binary scan $dataOut c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $IAC} {
-      set dataOut [binary format c2 [list $IAC $IAC]]
+      # Escape IAC by sending twice
+      set dataOut [binary scan c2 [list $IAC $IAC]]
       lappend dataSent {*}$dataOut
+      incr numEscapedIAC
     } else {
       lappend dataSent $dataOut
-    }
-    if {[catch {puts -nonewline $fid $dataOut}]} {
-      Close $fid
-      logger::log notice "Couldn't write to remote host, closing connection"
-      return
+      if {[catch {puts -nonewline $fid $dataOut}]} {
+        Close $fid
+        logger::log notice "Couldn't write to remote host, closing connection"
+        return
+      }
     }
   }
 
-  logger::eval info {
-    if {[llength $dataSent] > 0} {
-      set msg "Sent data:\n[::logger::dumpBytes $dataSent]"
+  logger::eval -noheader {
+    set msg ""
+
+    if {$numEscapedIAC} {
+      append msg "  Escaped IAC $numEscapedIAC time(s)\n"
     }
+    if {[llength $dataSent] > 0} {
+      append msg [::logger::dumpBytes $dataSent]
+    }
+
+    set msg
   }
 }
 

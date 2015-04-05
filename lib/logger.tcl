@@ -23,22 +23,75 @@ proc logger::close {} {
 }
 
 
-proc logger::log {level msg} {
+proc logger::log {args} {
   variable logFID
   variable active
 
   if {!$active} {return}
-  set currentTime [clock seconds]
-  set formattedTime [clock format $currentTime -format {%Y-%m-%d %H:%M:%S}]
-  set formattedMsg [format "%19s  %9s  %s" $formattedTime $level $msg]
+
+  set options {
+    {noheader {Don't add timestamp and level header}}
+  }
+
+  set usage ": log \[options] \[level] msg\noptions:"
+  set params [::cmdline::getoptions args $options $usage]
+
+  switch [llength $args] {
+    1 {
+      lassign $args msg
+      set level info
+    }
+    2 {
+      lassign $args level msg
+    }
+    - {
+      puts stderr "Error: Wrong number of arguments"
+      ::cmdline::usage $options $usage
+    }
+  }
+
+  if {[dict get $params noheader]} {
+    set formattedMsg $msg
+  } else {
+    set currentTime [clock seconds]
+    set formattedTime [clock format $currentTime -format {%Y-%m-%d %H:%M:%S}]
+    set formattedMsg [format "%19s  %9s  %s" $formattedTime $level $msg]
+  }
+
   puts $logFID $formattedMsg
   flush $logFID
 }
 
 
-proc logger::eval {level script} {
+proc logger::eval {args} {
+  set options {
+    {noheader {Don't add timestamp and level header}}
+  }
+
+  set usage ": eval \[options] \[level] script\noptions:"
+  set params [::cmdline::getoptions args $options $usage]
+
+  switch [llength $args] {
+    1 {
+      lassign $args script
+      set level info
+    }
+    2 {
+      lassign $args level script
+    }
+    - {
+      puts stderr "Error: Wrong number of arguments"
+      ::cmdline::usage $options $usage
+    }
+  }
+
   set result [uplevel 1 $script]
-  log $level $result
+
+  if {[dict get $params noheader]} {
+    log -noheader $level $result
+  } else {
+    log $level $result
+  }
 }
 
 
