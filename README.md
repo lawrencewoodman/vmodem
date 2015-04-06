@@ -15,13 +15,6 @@ Usage
 -----
 Communicate with the program via stdin/stdout.  So in vice you can specify it as the program to exec in the RS232 settings.
 
-Default Directories
--------------------
-To list the default directories for various platforms and to see the directories being used for the current system run:
-
-    $ tclsh bin/listdirs.tcl
-
-
 Contributions
 -------------
 If you want to improve this module make a pull request to the [repo](https://github.com/LawrenceWoodman/vmodem) on github.  Please put any pull requests in a separate branch to ease integration and add a test to prove that it works.
