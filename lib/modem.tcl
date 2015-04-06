@@ -77,10 +77,10 @@ proc modem::ProcessLine {} {
 
 
 proc modem::GetPhoneNumberDetails {phoneNumber} {
-  global phoneNumbers
+  global phonebook
 
-  if {[dict exists $phoneNumbers $phoneNumber]} {
-    set phoneNumberRecord [dict get $phoneNumbers $phoneNumber]
+  if {[dict exists $phonebook $phoneNumber]} {
+    set phoneNumberRecord [dict get $phonebook $phoneNumber]
     dict create \
       hostname [dict get $phoneNumberRecord hostname] \
       port [DictGetWithDefault $phoneNumberRecord port 23] \
@@ -103,7 +103,7 @@ proc modem::DictGetWithDefault {dictionary key default} {
 
 proc modem::Dial {adtLine} {
   variable speed
-  global phoneNumbers
+  global phonebook
 
   if {[regexp {(?i)^atd".*$} $adtLine]} { ; #"
     set hostname [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\2}] ; #"
