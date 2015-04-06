@@ -5,6 +5,7 @@ namespace eval telnet {
   variable oldStdoutConfig
   variable oldStdinReadableEventScript
   variable telnetCommandIn [list]
+  variable telnetCommandsOut [list]
 }
 
 
@@ -119,7 +120,7 @@ proc telnet::MakeTelnetCommandReadable {telnetCommand} {
     }
   }
 
-  append humanReadableCommand "($telnetCommand)"
+  return $humanReadableCommand
 }
 
 
@@ -222,20 +223,19 @@ proc telnet::SendToRemote {fid} {
   }
 
   set bytesFromStdin [split $dataFromStdin {}]
-
-  logger::eval info {
-    set numBytes [llength $bytesFromStdin]
-    if {$numBytes > 0} {
-      set msg "local > remote: length $numBytes"
-    }
+  set numBytes [llength $bytesFromStdin]
+  if {$numBytes == 0} {
+    return
   }
+
+  logger::log info "local > remote: length $numBytes"
 
   foreach dataOut $bytesFromStdin {
     binary scan $dataOut c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $IAC} {
       # Escape IAC by sending twice
-      set dataOut [binary scan c2 [list $IAC $IAC]]
+      set dataOut [binary format c2 [list $IAC $IAC]]
       lappend dataSent {*}$dataOut
       incr numEscapedIAC
     } else {
@@ -265,9 +265,6 @@ proc telnet::SendToRemote {fid} {
 
 proc telnet::Connected {fid} {
   variable state
-  set DO 253
-  set IAC 255
-  set ECHO 1
 
   chan event $fid writable {}
 

@@ -60,6 +60,7 @@ proc modem::ProcessLine {} {
 
     switch -regexp $line {
       {(?i)^atd[tp"]?.*$} { ;#"
+        puts "OK"
         Dial $line
         ::modem::changeMode "command"
       }
@@ -75,6 +76,31 @@ proc modem::ProcessLine {} {
 }
 
 
+proc modem::GetPhoneNumberDetails {phoneNumber} {
+  global phoneNumbers
+
+  if {[dict exists $phoneNumbers $phoneNumber]} {
+    set phoneNumberRecord [dict get $phoneNumbers $phoneNumber]
+    dict create \
+      hostname [dict get $phoneNumberRecord hostname] \
+      port [DictGetWithDefault $phoneNumberRecord port 23] \
+      speed [DictGetWithDefault $phoneNumberRecord speed 1200] \
+      type [DictGetWithDefault $phoneNumberRecord type "telnet"]
+  } else {
+    return {}
+  }
+}
+
+
+proc modem::DictGetWithDefault {dictionary key default} {
+  if {[dict exists $dictionary $key]} {
+    return [dict get $dictionary $key]
+  }
+
+  return $default
+}
+
+
 proc modem::Dial {adtLine} {
   variable speed
   global phoneNumbers
@@ -82,26 +108,35 @@ proc modem::Dial {adtLine} {
   if {[regexp {(?i)^atd".*$} $adtLine]} { ; #"
     set hostname [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\2}] ; #"
     set port [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\3}] ; #"
+    set type "telnet"
     logger::log info "Emulating dialing by telnetting to $hostname:$port"
   } else {
     set phoneNumber [regsub {(?i)^(atd[tp]?)(.*)$} $adtLine {\2}]
-    if {[dict exists $phoneNumbers $phoneNumber]} {
-      set phoneNumberRecord [dict get $phoneNumbers $phoneNumber]
-      set hostname [dict get $phoneNumberRecord hostname]
-      set port [dict get $phoneNumberRecord port]
-      set speed [dict get $phoneNumberRecord speed]
-      logger::log info \
-          "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
-    } else {
+    set details [GetPhoneNumberDetails $phoneNumber]
+
+    if {$details eq {}} {
       logger::log info \
                   "Couldn't find phone number $phoneNumber in phonebook"
       puts "NO CARRIER"
       return
     }
+
+    set hostname [dict get $details hostname]
+    set port [dict get $details port]
+    set speed [dict get $details speed]
+    set type [dict get $details type]
   }
 
-  puts "OK"
-  telnet::connect $hostname $port
+  if {$type eq "telnet"} {
+    logger::log info \
+        "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
+    telnet::connect $hostname $port
+  } else {
+    logger::log info \
+        "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
+    rawtcp::connect $hostname $port
+  }
+
   puts "NO CARRIER"
 }
 
@@ -120,9 +155,6 @@ proc modem::ReceiveFromStdin {} {
   set bytesFromStdin [split $dataFromStdin {}]
 
   foreach ch $bytesFromStdin {
-    logger::eval info {
-      set msg "Received bytes:\n[::logger::dumpBytes $bytesFromStdin]"
-    }
     binary scan $ch c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $LF || $unsignedByte == $CR} {
