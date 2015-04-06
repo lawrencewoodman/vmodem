@@ -1,3 +1,10 @@
+#
+# Connect to a remote host using a raw tcp/ip connection
+#
+# Copyright (C) 2015 Lawrence Woodman <lwoodman@vlifesystems.com>
+#
+# Licensed under an MIT licence.  Please see LICENCE.md for details.
+#
 namespace eval rawtcp {
   variable state closed
   variable oldStdinConfig

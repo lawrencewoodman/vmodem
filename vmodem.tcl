@@ -1,4 +1,16 @@
 #! /usr/bin/env tclsh
+# Virtual modem
+#
+# Copyright (C) 2015 Lawrence Woodman <lwoodman@vlifesystems.com>
+#
+# Licensed under an MIT licence.  Please see LICENCE.md for details.
+#
+# Emulate a modem so that applications such as vice can use it to connect to
+# machines across the internet as if they were dialling a phone number on a
+# modem.
+#
+package require Tcl 8.5
+
 package require cmdline
 package require AppDirs
 package require configurator

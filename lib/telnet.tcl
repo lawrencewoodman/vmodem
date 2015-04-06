@@ -1,4 +1,12 @@
+#
+# Connect to a remote host using a telnet connection
+#
+# Copyright (C) 2015 Lawrence Woodman <lwoodman@vlifesystems.com>
+#
+# Licensed under an MIT licence.  Please see LICENCE.md for details.
+#
 # Telnet Protocol Specification: http://tools.ietf.org/html/rfc854
+#
 namespace eval telnet {
   variable state closed
   variable oldStdinConfig

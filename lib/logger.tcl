@@ -1,3 +1,10 @@
+#
+# Control logging of information to a file
+#
+# Copyright (C) 2015 Lawrence Woodman <lwoodman@vlifesystems.com>
+#
+# Licensed under an MIT licence.  Please see LICENCE.md for details.
+#
 namespace eval logger {
   variable logFID
   variable active 0

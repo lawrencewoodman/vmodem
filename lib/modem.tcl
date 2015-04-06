@@ -1,3 +1,10 @@
+#
+# Emulate the hayes modem command interface.
+#
+# Copyright (C) 2015 Lawrence Woodman <lwoodman@vlifesystems.com>
+#
+# Licensed under an MIT licence.  Please see LICENCE.md for details.
+#
 namespace eval modem {
   variable mode "off"
   variable line ""
