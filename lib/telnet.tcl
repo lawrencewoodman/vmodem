@@ -8,39 +8,16 @@
 # Telnet Protocol Specification: http://tools.ietf.org/html/rfc854
 #
 namespace eval telnet {
-  variable state closed
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
   variable telnetCommandIn [list]
   variable telnetCommandsOut [list]
 }
 
 
 proc telnet::connect {hostname port} {
-  variable state
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
-
-  set state connecting
-  set oldStdinConfig [chan configure stdin]
-  set oldStdoutConfig [chan configure stdout]
-  set oldStdinReadableEventScript [
-    chan event stdin readable
-  ]
-
-  set fid [socket -async $hostname $port]
-  chan configure $fid -translation binary -blocking 0 -buffering none
-  chan configure stdin -translation binary -blocking 0 -buffering none
-  chan configure stdout -translation binary -blocking 0 -buffering none
-  chan event $fid writable [list ::telnet::Connected $fid]
-  chan event $fid readable [list ::telnet::ReceiveFromRemote $fid]
-  chan event stdin readable [list ::telnet::SendToRemote $fid]
-
-  while {$state ne "closed"} {
-    vwait ::telnet::state
-  }
+  ::rawtcp::connect -localReadableCmd ::telnet::SendLocalToRemote \
+                    -remoteReadableCmd ::telnet::ReceiveFromRemote \
+                    $hostname \
+                    $port
 }
 
 
@@ -48,60 +25,28 @@ proc telnet::connect {hostname port} {
 # Internal Commands
 ############################
 
-proc telnet::Close {fid} {
-  variable state
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
-
-  if {$state ne "closed"} {
-    close $fid
-    chan configure stdin {*}$oldStdinConfig
-    chan configure stdout {*}$oldStdoutConfig
-    chan event stdin readable $oldStdinReadableEventScript
-    set state closed
-  }
-}
-
 proc telnet::ReceiveFromRemote {fid} {
   variable telnetCommandIn
-
   set IAC 255
+  set dataIn [rawtcp::getFromRemote $fid]
+  set bytesIn [split $dataIn {}]
 
-  if {[catch {read $fid} dataIn] || $dataIn eq ""} {
-    Close $fid
-    logger::log notice "Couldn't read from remote host, closing connection"
-  } else {
-    set bytesIn [split $dataIn {}]
-
-    logger::eval info {
-      set numBytes [llength $bytesIn]
-      if {$numBytes > 0} {
-        set msg "remote > local: length $numBytes"
-      }
-    }
-
-    foreach ch $bytesIn {
-      binary scan $ch c signedByte
-      set unsignedByte [expr {$signedByte & 0xff}]
-      if {[llength $telnetCommandIn] == 0} {
-        if {$unsignedByte == $IAC} {
-          lappend telnetCommandIn $unsignedByte
-        } else {
-          puts -nonewline $ch
-        }
-      } else {
+  foreach ch $bytesIn {
+    binary scan $ch c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+    if {[llength $telnetCommandIn] == 0} {
+      if {$unsignedByte == $IAC} {
         lappend telnetCommandIn $unsignedByte
-        HandleTelnetCommand $fid
+      } else {
+        puts -nonewline $ch
       }
+    } else {
+      lappend telnetCommandIn $unsignedByte
+      HandleTelnetCommand $fid
     }
-
-    logger::eval -noheader {
-      ::logger::dumpBytes $bytesIn
-    }
-
-    SendTelnetCommands $fid
   }
+
+  SendTelnetCommands $fid
 }
 
 
@@ -185,102 +130,57 @@ proc telnet::HandleTelnetCommand {fid} {
 }
 
 
-
 proc telnet::SendTelnetCommands {fid} {
   variable telnetCommandsOut
-  set dataSent [list]
-  set numBytesToSend [llength [concat {*}$telnetCommandsOut]]
-
-  if {$numBytesToSend == 0} {return}
-  logger::log info "local > remote: length $numBytesToSend"
+  set bytesToSend [list]
+  set logMsg ""
 
   foreach telnetCommand $telnetCommandsOut {
     set binaryData [binary format c* $telnetCommand]
 
-    logger::eval -noheader {
-      set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
-      set msg "    Telnet command: $humanReadableCommand"
-    }
-
-    if {[catch {puts -nonewline $fid $binaryData}]} {
-      Close $fid
-      logger::log notice "Couldn't write to remote host, closing connection"
-    } else {
-      lappend dataSent {*}[split $binaryData {}]
-    }
+    set humanReadableCommand [MakeTelnetCommandReadable $telnetCommand]
+    lappend bytesToSend {*}[split $binaryData {}]
+    append logMsg "    Telnet command: $humanReadableCommand\n"
   }
 
-  logger::eval -noheader {
-    ::logger::dumpBytes $dataSent
+  ::rawtcp::sendData $fid [join $bytesToSend {}]
+
+  if {$logMsg ne ""} {
+    logger::log -noheader [string trimright $logMsg]
   }
 
   set telnetCommandsOut [list]
 }
 
 
-proc telnet::SendToRemote {fid} {
-  variable telnetCommandsOut
+proc telnet::EscapeIACs {dataIn} {
   set IAC 255
-  set LF 0x0A
-  set CR 0x0D
-  set dataSent [list]
+  set bytesOut [list]
+  set bytesIn [split $dataIn {}]
   set numEscapedIAC 0
 
-  if {[catch {read stdin} dataFromStdin]} {
-    logger::log error "Couldn't read from stdin"
-  }
-
-  set bytesFromStdin [split $dataFromStdin {}]
-  set numBytes [llength $bytesFromStdin]
-  if {$numBytes == 0} {
-    return
-  }
-
-  logger::log info "local > remote: length $numBytes"
-
-  foreach dataOut $bytesFromStdin {
-    binary scan $dataOut c signedByte
+  foreach byte $bytesIn {
+    binary scan $byte c signedByte
     set unsignedByte [expr {$signedByte & 0xff}]
     if {$unsignedByte == $IAC} {
       # Escape IAC by sending twice
-      set dataOut [binary format c2 [list $IAC $IAC]]
-      lappend dataSent {*}$dataOut
+      lappend bytesOut {*}[binary format c2 [list $IAC $IAC]]
       incr numEscapedIAC
     } else {
-      lappend dataSent $dataOut
-      if {[catch {puts -nonewline $fid $dataOut}]} {
-        Close $fid
-        logger::log notice "Couldn't write to remote host, closing connection"
-        return
-      }
+      lappend bytesOut $byte
     }
   }
 
-  logger::eval -noheader {
-    set msg ""
-
-    if {$numEscapedIAC} {
-      append msg "  Escaped IAC $numEscapedIAC time(s)\n"
-    }
-    if {[llength $dataSent] > 0} {
-      append msg [::logger::dumpBytes $dataSent]
-    }
-
-    set msg
+  if {$numEscapedIAC > 0} {
+    set logMsg "  Escaped IAC $numEscapedIAC time(s)"
+  } else {
+    set logMsg ""
   }
+
+  list [join $bytesOut {}] $logMsg
 }
 
 
-proc telnet::Connected {fid} {
-  variable state
-
-  chan event $fid writable {}
-
-  if {[dict exists [chan configure $fid] -peername]} {
-    set peername [dict get [chan configure $fid] -peername]
-    logger::log info "Connected to $peername"
-    ::modem::changeMode "on-line"
-    puts "CONNECT $::modem::speed"
-    set state open
-  }
+proc telnet::SendLocalToRemote {fid} {
+  ::rawtcp::sendLocalToRemote -processCmd ::telnet::EscapeIACs $fid
 }
