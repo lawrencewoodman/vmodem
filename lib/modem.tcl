@@ -9,11 +9,14 @@ namespace eval modem {
   variable mode "off"
   variable line ""
   variable speed 1200
+  variable config
 }
 
 
-proc modem::emulateModem {} {
+proc modem::emulateModem {_config} {
   variable mode
+  variable config
+  set config $_config
 
   set problem [
     catch {
@@ -23,6 +26,15 @@ proc modem::emulateModem {} {
 
       changeMode "command"
       while {$mode ne "off"} {
+        dict with config {
+          if {$auto_answer} {
+            if {$incoming_type eq "telnet" || $incoming_type eq "rawtcp"} {
+              ::${incoming_type}::listen $incoming_port \
+                                         $ring_on_connect \
+                                         $wait_for_ata
+            }
+          }
+        }
         vwait ::modem::mode
       }
     } result options
@@ -55,6 +67,7 @@ proc modem::changeMode {newMode} {
 ########################
 proc modem::ProcessLine {} {
   variable line
+  variable config
 
   set line [string trim $line]
   if {$line ne ""} {
@@ -69,6 +82,12 @@ proc modem::ProcessLine {} {
       {(?i)^atd[tp"]?.*$} { ;#"
         puts "OK"
         Dial $line
+        ::modem::changeMode "command"
+      }
+      {(?i)^ata} {
+        puts "OK"
+        set incoming_type [dict get $config incoming_type]
+        ::${incoming_type}::completeInbondConnection
         ::modem::changeMode "command"
       }
 

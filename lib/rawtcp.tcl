@@ -10,6 +10,33 @@ namespace eval rawtcp {
   variable oldStdinConfig
   variable oldStdoutConfig
   variable oldStdinReadableEventScript
+  variable inBoundChannel {}
+  variable serverChannel {}
+}
+
+
+proc rawtcp::listen {port ringOnConnect waitForAta} {
+  variable state
+  variable serverChannel
+
+  if {$state ne "open"} {
+    logger::log info "Listening for rawtcp connection on port: $port"
+
+    set serverChannel [
+      socket -server [list ::rawtcp::ServiceIncomingConnection \
+                     $ringOnConnect \
+                     $waitForAta] \
+               $port
+    ]
+  }
+}
+
+
+proc rawtcp::completeInbondConnection {} {
+  variable inBoundChannel
+  if {[catch {connect $inBoundChannel}]} {
+    puts "NO CARRIER"
+  }
 }
 
 
@@ -26,15 +53,10 @@ proc rawtcp::connect {args} {
                            {Command prefix to call when remote readable}}
   }
 
-  set usage ": connect \[options] hostname port\noptions:"
+  set usage ": connect \[options] hostname port\n  connect \[options] incomingChannel\noptions:"
   set params [::cmdline::getoptions args $options $usage]
+  set numArgs [llength $args]
 
-  if {[llength $args] != 2} {
-    puts stderr "Error: Wrong number of arguments"
-    ::cmdline::usage $options $usage
-  }
-
-  lassign $args hostname port
   set localReadableCmd [dict get $params localReadableCmd]
   set remoteReadableCmd [dict get $params remoteReadableCmd]
 
@@ -45,7 +67,16 @@ proc rawtcp::connect {args} {
     chan event stdin readable
   ]
 
-  set fid [socket -async $hostname $port]
+  if {$numArgs == 1} {
+    lassign $args fid
+  } elseif {$numArgs == 2} {
+    lassign $args hostname port
+    set fid [socket -async $hostname $port]
+  } else {
+    puts stderr [::cmdline::usage $options $usage]
+    return -code error "Wrong number of arguments"
+  }
+
   chan configure $fid -translation binary -blocking 0 -buffering none
   chan configure stdin -translation binary -blocking 0 -buffering none
   chan configure stdout -translation binary -blocking 0 -buffering none
@@ -91,15 +122,14 @@ proc rawtcp::sendLocalToRemote {args} {
   set params [::cmdline::getoptions args $options $usage]
 
   if {[llength $args] != 1} {
-    puts stderr "Error: Wrong number of arguments"
-    ::cmdline::usage $options $usage
+    puts stderr [::cmdline::usage $options $usage]
+    return -code error "Wrong number of arguments"
   }
   lassign $args fid
   set processCmd [dict get $params processCmd]
 
   if {[catch {read stdin} dataFromStdin]} {
-    logger::log error "Couldn't read from stdin"
-    return
+    return -code error "Couldn't read from stdin"
   }
 
   if {$processCmd eq ""} {
@@ -149,6 +179,7 @@ proc rawtcp::Close {fid} {
     chan configure stdout {*}$oldStdoutConfig
     chan event stdin readable $oldStdinReadableEventScript
     set state closed
+    puts "NO CARRIER"
   }
 }
 
@@ -161,6 +192,7 @@ proc rawtcp::ReceiveFromRemote {fid} {
 proc rawtcp::Connected {fid} {
   variable state
 
+  StopListening
   chan event $fid writable {}
 
   if {[dict exists [chan configure $fid] -peername]} {
@@ -169,5 +201,41 @@ proc rawtcp::Connected {fid} {
     ::modem::changeMode "on-line"
     puts "CONNECT $::modem::speed"
     set state open
+  }
+}
+
+
+proc rawtcp::StopListening {} {
+  variable serverChannel
+
+  if {$serverChannel ne {}} {
+    logger::log info "Stop listening"
+    close $serverChannel
+    set serverChannel {}
+  }
+}
+
+
+proc rawtcp::ServiceIncomingConnection {
+  ringOnConnect
+  waitForAta
+  channel
+  addr
+  port
+} {
+  variable inBoundChannel
+
+  StopListening
+
+  if {$ringOnConnect} {
+    puts "RING"
+  }
+
+  if {$waitForAta} {
+    logger::log info "Recevied connection from: $addr, waiting for ATA"
+    set inBoundChannel $channel
+  } else {
+    logger::log info "Recevied connection from: $addr"
+    connect $channel
   }
 }
