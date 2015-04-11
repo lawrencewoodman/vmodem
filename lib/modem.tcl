@@ -14,7 +14,7 @@ namespace eval modem {
   variable line ""
   variable speed 1200
   variable config
-  variable transport [dict create telnet [Telnet new] rawtcp [RawTcp new]]
+  variable transport {}
 }
 
 
@@ -24,28 +24,30 @@ proc modem::emulateModem {_config} {
   variable transport
   set config $_config
 
-  set problem [
-    catch {
-      chan configure stdin -translation binary -blocking 0 -buffering none
-      chan configure stdout -translation binary -blocking 0 -buffering none
-      chan event stdin readable [list ::modem::ReceiveFromStdin]
+  dict with config {
+    set transport [
+      dict create telnet [Telnet new $ring_on_connect $wait_for_ata] \
+                  rawtcp [RawTcp new $ring_on_connect $wait_for_ata]
+    ]
+    set problem [
+      catch {
+        chan configure stdin -translation binary -blocking 0 -buffering none
+        chan configure stdout -translation binary -blocking 0 -buffering none
+        chan event stdin readable [list ::modem::ReceiveFromStdin]
 
-      changeMode "command"
-      while {$mode ne "off"} {
-        dict with config {
+        changeMode "command"
+        while {$mode ne "off"} {
           if {$auto_answer} {
             if {$incoming_type eq "telnet" || $incoming_type eq "rawtcp"} {
               set transportInst [dict get $transport $incoming_type]
-              $transportInst listen $incoming_port \
-                                    $ring_on_connect \
-                                    $wait_for_ata
+              $transportInst listen $incoming_port
             }
           }
+          vwait ::modem::mode
         }
-        vwait ::modem::mode
-      }
-    } result options
-  ]
+      } result options
+    ]
+  }
 
   if {$problem} {
     logger::log critical "result: $result\noptions: $options"

@@ -13,23 +13,25 @@ package require TclOO
   variable oldStdinReadableEventScript
   variable inBoundChannel
   variable serverChannel
+  variable ringOnConnect
+  variable waitForAta
 
-  constructor {} {
-    # TODO: Put ringOnConnect and waitForAta as arguments here
+  constructor {_ringOnConnect _waitForAta} {
+    set ringOnConnect $_ringOnConnect
+    set waitForAta $_waitForAta
+
     set state closed
     set inBoundChannel {}
     set serverChannel {}
   }
 
-  method listen {port ringOnConnect waitForAta} {
-    set selfNamespace [self namespace]
+  method listen {port} {
     if {$state ne "open"} {
       logger::log info "Listening for rawtcp connection on port: $port"
 
+      set selfNamespace [self namespace]
       set serverChannel [
-        socket -server [list ${selfNamespace}::my ServiceIncomingConnection \
-                             $ringOnConnect \
-                             $waitForAta] \
+        socket -server [list ${selfNamespace}::my ServiceIncomingConnection] \
                        $port
       ]
     }
@@ -187,13 +189,7 @@ package require TclOO
   }
 
 
-  method ServiceIncomingConnection {
-    ringOnConnect
-    waitForAta
-    channel
-    addr
-    port
-  } {
+  method ServiceIncomingConnection {channel addr port} {
     my stopListening
 
     if {$ringOnConnect} {

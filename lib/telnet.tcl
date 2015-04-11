@@ -13,8 +13,8 @@ package require TclOO
   superclass RawTcp
   variable telnetCommandIn telnetCommandsOut
 
-  constructor {} {
-    next
+  constructor {_ringOnConnect _waitForAta} {
+    next $_ringOnConnect $_waitForAta
     set telnetCommandIn [list]
     set telnetCommandsOut [list]
   }
