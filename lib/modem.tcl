@@ -6,16 +6,22 @@
 # Licensed under an MIT licence.  Please see LICENCE.md for details.
 #
 namespace eval modem {
+  set LibDir [file dirname [info script]]
+  source [file join $LibDir rawtcp.tcl]
+  source [file join $LibDir telnet.tcl]
+
   variable mode "off"
   variable line ""
   variable speed 1200
   variable config
+  variable transport [dict create telnet [Telnet new] rawtcp [RawTcp new]]
 }
 
 
 proc modem::emulateModem {_config} {
   variable mode
   variable config
+  variable transport
   set config $_config
 
   set problem [
@@ -29,9 +35,10 @@ proc modem::emulateModem {_config} {
         dict with config {
           if {$auto_answer} {
             if {$incoming_type eq "telnet" || $incoming_type eq "rawtcp"} {
-              ::${incoming_type}::listen $incoming_port \
-                                         $ring_on_connect \
-                                         $wait_for_ata
+              set transportInst [dict get $transport $incoming_type]
+              $transportInst listen $incoming_port \
+                                    $ring_on_connect \
+                                    $wait_for_ata
             }
           }
         }
@@ -65,9 +72,19 @@ proc modem::changeMode {newMode} {
 ########################
 # Internal Commands
 ########################
+proc modem::StopListening {} {
+  variable transport
+
+  dict for {transportType transportInst} $transport {
+    $transportInst stopListening
+  }
+}
+
+
 proc modem::ProcessLine {} {
   variable line
   variable config
+  variable transport
 
   set line [string trim $line]
   if {$line ne ""} {
@@ -77,7 +94,6 @@ proc modem::ProcessLine {} {
       set bytes [split $line {}]
       set msg "Received line:\n[::logger::dumpBytes $bytes]"
     }
-
     switch -regexp $line {
       {(?i)^atd[tp"]?.*$} { ;#"
         puts "OK"
@@ -87,7 +103,8 @@ proc modem::ProcessLine {} {
       {(?i)^ata} {
         puts "OK"
         set incoming_type [dict get $config incoming_type]
-        ::${incoming_type}::completeInbondConnection
+        set transportInst [dict get $transport $incoming_type]
+        $transportInst completeInbondConnection
         ::modem::changeMode "command"
       }
 
@@ -128,8 +145,9 @@ proc modem::DictGetWithDefault {dictionary key default} {
 
 
 proc modem::Dial {adtLine} {
-  variable speed
   global phonebook
+  variable speed
+  variable transport
 
   if {[regexp {(?i)^atd".*$} $adtLine]} { ; #"
     set hostname [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\2}] ; #"
@@ -153,15 +171,17 @@ proc modem::Dial {adtLine} {
     set type [dict get $details type]
   }
 
+  StopListening
+
   if {$type eq "telnet"} {
-    logger::log info \
-        "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
-    telnet::connect $hostname $port
+    set logMsg "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
   } else {
-    logger::log info \
-        "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
-    rawtcp::connect $hostname $port
+    set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
   }
+
+  logger::log info $logMsg
+  set transportInst [dict get $transport $type]
+  $transportInst connect $hostname $port
 
   puts "NO CARRIER"
 }

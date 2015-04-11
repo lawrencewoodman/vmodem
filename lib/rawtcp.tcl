@@ -5,237 +5,207 @@
 #
 # Licensed under an MIT licence.  Please see LICENCE.md for details.
 #
-namespace eval rawtcp {
-  variable state closed
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
-  variable inBoundChannel {}
-  variable serverChannel {}
-}
+package require TclOO
 
-
-proc rawtcp::listen {port ringOnConnect waitForAta} {
+::oo::class create RawTcp {
   variable state
+  variable oldStdinConfig oldStdoutConfig
+  variable oldStdinReadableEventScript
+  variable inBoundChannel
   variable serverChannel
 
-  if {$state ne "open"} {
-    logger::log info "Listening for rawtcp connection on port: $port"
-
-    set serverChannel [
-      socket -server [list ::rawtcp::ServiceIncomingConnection \
-                     $ringOnConnect \
-                     $waitForAta] \
-               $port
-    ]
-  }
-}
-
-
-proc rawtcp::completeInbondConnection {} {
-  variable inBoundChannel
-  if {[catch {connect $inBoundChannel}]} {
-    puts "NO CARRIER"
-  }
-}
-
-
-proc rawtcp::connect {args} {
-  variable state
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
-
-  set options {
-    {localReadableCmd.arg ::rawtcp::sendLocalToRemote
-                          {Command prefix to call when local readable}}
-    {remoteReadableCmd.arg ::rawtcp::ReceiveFromRemote
-                           {Command prefix to call when remote readable}}
+  constructor {} {
+    # TODO: Put ringOnConnect and waitForAta as arguments here
+    set state closed
+    set inBoundChannel {}
+    set serverChannel {}
   }
 
-  set usage ": connect \[options] hostname port\n  connect \[options] incomingChannel\noptions:"
-  set params [::cmdline::getoptions args $options $usage]
-  set numArgs [llength $args]
+  method listen {port ringOnConnect waitForAta} {
+    set selfNamespace [self namespace]
+    if {$state ne "open"} {
+      logger::log info "Listening for rawtcp connection on port: $port"
 
-  set localReadableCmd [dict get $params localReadableCmd]
-  set remoteReadableCmd [dict get $params remoteReadableCmd]
-
-  set state connecting
-  set oldStdinConfig [chan configure stdin]
-  set oldStdoutConfig [chan configure stdout]
-  set oldStdinReadableEventScript [
-    chan event stdin readable
-  ]
-
-  if {$numArgs == 1} {
-    lassign $args fid
-  } elseif {$numArgs == 2} {
-    lassign $args hostname port
-    set fid [socket -async $hostname $port]
-  } else {
-    puts stderr [::cmdline::usage $options $usage]
-    return -code error "Wrong number of arguments"
-  }
-
-  chan configure $fid -translation binary -blocking 0 -buffering none
-  chan configure stdin -translation binary -blocking 0 -buffering none
-  chan configure stdout -translation binary -blocking 0 -buffering none
-  chan event $fid writable [list ::rawtcp::Connected $fid]
-  chan event $fid readable [list {*}$remoteReadableCmd $fid]
-  chan event stdin readable [list {*}$localReadableCmd $fid]
-
-  while {$state ne "closed"} {
-    vwait ::rawtcp::state
-  }
-}
-
-
-proc rawtcp::getFromRemote {fid} {
-  if {[catch {read $fid} dataIn] || $dataIn eq ""} {
-    Close $fid
-    logger::log notice "Couldn't read from remote host, closing connection"
-    return
-  }
-
-  set bytesIn [split $dataIn {}]
-  logger::eval info {
-    set numBytes [llength $bytesIn]
-    if {$numBytes > 0} {
-      set msg "remote > local: length $numBytes"
+      set serverChannel [
+        socket -server [list ${selfNamespace}::my ServiceIncomingConnection \
+                             $ringOnConnect \
+                             $waitForAta] \
+                       $port
+      ]
     }
   }
 
-  logger::eval -noheader {
-    ::logger::dumpBytes $bytesIn
+
+  method stopListening {} {
+    if {$serverChannel ne {}} {
+      logger::log info "Stop listening"
+      close $serverChannel
+      set serverChannel {}
+    }
   }
 
-  return $dataIn
-}
 
-
-proc rawtcp::sendLocalToRemote {args} {
-  set options {
-    {processCmd.arg "" {Command prefix to process local data before sending}}
+  method completeInbondConnection {} {
+    if {[catch {my connect $inBoundChannel}]} {
+      puts "NO CARRIER"
+    }
   }
 
-  set usage ": sendLocalToRemote \[options] fid\noptions:"
-  set params [::cmdline::getoptions args $options $usage]
 
-  if {[llength $args] != 1} {
-    puts stderr [::cmdline::usage $options $usage]
-    return -code error "Wrong number of arguments"
-  }
-  lassign $args fid
-  set processCmd [dict get $params processCmd]
+  method connect {args} {
+    set usage ": connect hostname port\n  connect incomingChannel"
+    set numArgs [llength $args]
 
-  if {[catch {read stdin} dataFromStdin]} {
-    return -code error "Couldn't read from stdin"
-  }
+    set state connecting
+    set oldStdinConfig [chan configure stdin]
+    set oldStdoutConfig [chan configure stdout]
+    set oldStdinReadableEventScript [
+      chan event stdin readable
+    ]
+    set selfNamespace [self namespace]
 
-  if {$processCmd eq ""} {
-    set dataToSend $dataFromStdin
-    set logMsg ""
-  } else {
-    lassign [uplevel 1 [list {*}$processCmd $dataFromStdin]] dataToSend logMsg
-  }
+    if {$numArgs == 1} {
+      lassign $args fid
+    } elseif {$numArgs == 2} {
+      lassign $args hostname port
+      set fid [socket -async $hostname $port]
+    } else {
+      puts stderr $usage
+      return -code error "Wrong number of arguments"
+    }
 
-  sendData $fid $dataToSend
-  logger::log -noheader $logMsg
-}
+    chan configure $fid -translation binary -blocking 0 -buffering none
+    chan configure stdin -translation binary -blocking 0 -buffering none
+    chan configure stdout -translation binary -blocking 0 -buffering none
+    chan event $fid writable [list ${selfNamespace}::my Connected $fid]
+    chan event $fid readable [
+      list ${selfNamespace}::my ReceiveFromRemote $fid
+    ]
+    chan event stdin readable [
+      list ${selfNamespace}::my SendLocalToRemote $fid
+    ]
 
-
-proc rawtcp::sendData {fid dataOut} {
-  set bytesOut [split $dataOut {}]
-  set numBytes [llength $bytesOut]
-  if {$numBytes == 0} {
-    return
-  }
-
-  logger::log info "local > remote: length $numBytes"
-
-  if {[catch {puts -nonewline $fid $dataOut}]} {
-    Close $fid
-    logger::log notice "Couldn't write to remote host, closing connection"
-    return
+    while {$state ne "closed"} {
+      vwait ${selfNamespace}::state
+    }
   }
 
-  logger::eval -noheader {::logger::dumpBytes $bytesOut}
-}
 
+  method getFromRemote {fid} {
+    if {[catch {read $fid} dataIn] || $dataIn eq ""} {
+      my Close $fid
+      logger::log notice "Couldn't read from remote host, closing connection"
+      return
+    }
 
-############################
-# Internal Commands
-############################
+    set bytesIn [split $dataIn {}]
+    logger::eval info {
+      set numBytes [llength $bytesIn]
+      if {$numBytes > 0} {
+        set msg "remote > local: length $numBytes"
+      }
+    }
 
-proc rawtcp::Close {fid} {
-  variable state
-  variable oldStdinConfig
-  variable oldStdoutConfig
-  variable oldStdinReadableEventScript
+    logger::eval -noheader {
+      ::logger::dumpBytes $bytesIn
+    }
 
-  if {$state ne "closed"} {
-    close $fid
-    chan configure stdin {*}$oldStdinConfig
-    chan configure stdout {*}$oldStdoutConfig
-    chan event stdin readable $oldStdinReadableEventScript
-    set state closed
-    puts "NO CARRIER"
-  }
-}
-
-
-proc rawtcp::ReceiveFromRemote {fid} {
-  puts -nonewline [getFromRemote $fid]
-}
-
-
-proc rawtcp::Connected {fid} {
-  variable state
-
-  StopListening
-  chan event $fid writable {}
-
-  if {[dict exists [chan configure $fid] -peername]} {
-    set peername [dict get [chan configure $fid] -peername]
-    logger::log info "Connected to $peername"
-    ::modem::changeMode "on-line"
-    puts "CONNECT $::modem::speed"
-    set state open
-  }
-}
-
-
-proc rawtcp::StopListening {} {
-  variable serverChannel
-
-  if {$serverChannel ne {}} {
-    logger::log info "Stop listening"
-    close $serverChannel
-    set serverChannel {}
-  }
-}
-
-
-proc rawtcp::ServiceIncomingConnection {
-  ringOnConnect
-  waitForAta
-  channel
-  addr
-  port
-} {
-  variable inBoundChannel
-
-  StopListening
-
-  if {$ringOnConnect} {
-    puts "RING"
+    return $dataIn
   }
 
-  if {$waitForAta} {
-    logger::log info "Recevied connection from: $addr, waiting for ATA"
-    set inBoundChannel $channel
-  } else {
-    logger::log info "Recevied connection from: $addr"
-    connect $channel
+
+
+  ############################
+  # Private methods
+  ############################
+
+  method SendLocalToRemote {fid} {
+    if {[catch {read stdin} dataFromStdin]} {
+      return -code error "Couldn't read from stdin"
+    }
+
+    lassign [my ProcessLocalDataBeforeSending $dataFromStdin] \
+            dataToSend \
+            logMsg
+
+    my sendData $fid $dataToSend
+    logger::log -noheader $logMsg
+  }
+
+
+  method sendData {fid dataOut} {
+    set bytesOut [split $dataOut {}]
+    set numBytes [llength $bytesOut]
+    if {$numBytes == 0} {
+      return
+    }
+
+    logger::log info "local > remote: length $numBytes"
+
+    if {[catch {puts -nonewline $fid $dataOut}]} {
+      my Close $fid
+      logger::log notice "Couldn't write to remote host, closing connection"
+      return
+    }
+
+    logger::eval -noheader {::logger::dumpBytes $bytesOut}
+  }
+
+
+  method ProcessLocalDataBeforeSending {dataIn} {
+    return [list $dataIn ""]
+  }
+
+
+  method Close {fid} {
+    if {$state ne "closed"} {
+      close $fid
+      chan configure stdin {*}$oldStdinConfig
+      chan configure stdout {*}$oldStdoutConfig
+      chan event stdin readable $oldStdinReadableEventScript
+      set state closed
+      puts "NO CARRIER"
+    }
+  }
+
+
+  method ReceiveFromRemote {fid} {
+    puts -nonewline [my getFromRemote $fid]
+  }
+
+
+  method Connected {fid} {
+    chan event $fid writable {}
+
+    if {[dict exists [chan configure $fid] -peername]} {
+      set peername [dict get [chan configure $fid] -peername]
+      logger::log info "Connected to $peername"
+      ::modem::changeMode "on-line"
+      puts "CONNECT $::modem::speed"
+      set state open
+    }
+  }
+
+
+  method ServiceIncomingConnection {
+    ringOnConnect
+    waitForAta
+    channel
+    addr
+    port
+  } {
+    my stopListening
+
+    if {$ringOnConnect} {
+      puts "RING"
+    }
+
+    if {$waitForAta} {
+      logger::log info "Recevied connection from: $addr, waiting for ATA"
+      set inBoundChannel $channel
+    } else {
+      logger::log info "Recevied connection from: $addr"
+      my connect $channel
+    }
   }
 }

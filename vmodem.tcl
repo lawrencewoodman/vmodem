@@ -20,8 +20,6 @@ set ThisScriptDir [file dirname [info script]]
 set LibDir [file join $ThisScriptDir lib]
 source [file join $LibDir logger.tcl]
 source [file join $LibDir modem.tcl]
-source [file join $LibDir rawtcp.tcl]
-source [file join $LibDir telnet.tcl]
 
 
 proc loadConfiguration {} {
