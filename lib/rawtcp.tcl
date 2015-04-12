@@ -25,16 +25,9 @@ package require TclOO
     set serverChannel {}
   }
 
-  method listen {port} {
-    if {$state ne "open"} {
-      logger::log info "Listening for rawtcp connection on port: $port"
 
-      set selfNamespace [self namespace]
-      set serverChannel [
-        socket -server [list ${selfNamespace}::my ServiceIncomingConnection] \
-                       $port
-      ]
-    }
+  method listen {port} {
+    my ListenWithLogMsg $port "Listening for raw connection on port: $port"
   }
 
 
@@ -204,4 +197,18 @@ package require TclOO
       my connect $channel
     }
   }
+
+
+  method ListenWithLogMsg {port logMsg} {
+    if {$state ne "open"} {
+      logger::log info $logMsg
+
+      set selfNamespace [self namespace]
+      set serverChannel [
+        socket -server [list ${selfNamespace}::my ServiceIncomingConnection] \
+                       $port
+      ]
+    }
+  }
+
 }

@@ -19,9 +19,11 @@ package require TclOO
     set telnetCommandsOut [list]
   }
 
-  method connect {hostname port} {
-    next $hostname $port
+
+  method listen {port} {
+    my ListenWithLogMsg $port "Listening for telnet connection on port: $port"
   }
+
 
   ############################
   # Private methods
