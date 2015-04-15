@@ -68,7 +68,6 @@ test connect-3 {Check can send and receive data} -setup {
   set echoPort [testHelpers::rawEchoListen]
   set telnet [Telnet new $inRead $outWrite 0 0]
 
-  # NOTE: 0xff is sent as binary below to check that it is escaped
   set chatScript {
     {expect "CONNECT 1200"}
     {send "this was sent from local"}
@@ -121,6 +120,62 @@ test connect-4 {Check detects when remote connection has dropped and send a NO C
   chatter::chat $chatScript $closeScript $telnet
   chatter::getMsg
 } -cleanup {
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test connect-5 {Check will escape 0xFF when sent} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set echoPort [testHelpers::rawEchoListen decr]
+  set telnet [Telnet new $inRead $outWrite 0 0]
+
+  set chatScript {
+    {sendBinary {0x23 0xff 0x44}}
+    {expectBinary {0x22 0xfe 0xfe 0x43}}
+  }
+  set closeScript {
+    $telnet close
+    $telnet setPulseDelay 0
+    testHelpers::stopListening
+  }
+  $telnet setPulseDelay 10
+  $telnet setPulseScript [list chatter::chat $chatScript $closeScript $telnet]
+} -body {
+  $telnet connect localhost $echoPort
+  chatter::getMsg
+} -cleanup {
+  testHelpers::closeRemote
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test connect-6 {Check will recognize escaped 0xFF when received} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set echoPort [testHelpers::rawEchoListen decr]
+  set telnet [Telnet new $inRead $outWrite 0 0]
+
+  set chatScript {
+    {sendBinary {0x23 0x00 0x00 0x44}}
+    {expectBinary {0x22 0xff 0x43}}
+  }
+  set closeScript {
+    $telnet close
+    $telnet setPulseDelay 0
+    testHelpers::stopListening
+  }
+  $telnet setPulseDelay 10
+  $telnet setPulseScript [list chatter::chat $chatScript $closeScript $telnet]
+} -body {
+  $telnet connect localhost $echoPort
+  chatter::getMsg
+} -cleanup {
+  testHelpers::closeRemote
   testHelpers::destroyFakeModem
   chatter::close
 } -result {no errors}

@@ -35,14 +35,15 @@ proc testHelpers::findUnusedPort {} {
 }
 
 
-proc testHelpers::rawEchoListen {} {
+proc testHelpers::rawEchoListen {{mode echo}} {
   variable listenChannel
   set port 1024
 
   while 1 {
     try {
       set listenChannel [
-        socket -server ::testHelpers::ServiceIncomingConnection $port
+        socket -server [list ::testHelpers::ServiceIncomingConnection $mode] \
+                       $port
       ]
       return $port
     } on error {} {
@@ -81,10 +82,15 @@ proc testHelpers::closeRemote {} {
 #############################
 # Internal Commands
 #############################
-proc testHelpers::ServiceIncomingConnection {channel addr port} {
+proc testHelpers::ServiceIncomingConnection {mode channel addr port} {
   variable remoteChannel
   set remoteChannel $channel
-  ::testHelpers::ConfigEchoConnection
+
+  if {$mode eq "echo"} {
+    ::testHelpers::ConfigEchoConnection
+  } else {
+    ::testHelpers::ConfigDecrConnection
+  }
 }
 
 
@@ -93,12 +99,22 @@ proc testHelpers::ConfigEchoConnection {} {
   chan configure $remoteChannel -translation binary \
                                 -blocking 0 \
                                 -buffering none
-  chan event $remoteChannel writable ::testHelpers::EchoConnected
+  chan event $remoteChannel writable ::testHelpers::Connected
   chan event $remoteChannel readable ::testHelpers::EchoInput
 }
 
 
-proc testHelpers::EchoConnected {} {
+proc testHelpers::ConfigDecrConnection {} {
+  variable remoteChannel
+  chan configure $remoteChannel -translation binary \
+                                -blocking 0 \
+                                -buffering none
+  chan event $remoteChannel writable ::testHelpers::Connected
+  chan event $remoteChannel readable ::testHelpers::DecrInput
+}
+
+
+proc testHelpers::Connected {} {
   variable remoteChannel
   chan event $remoteChannel writable {}
 }
@@ -112,4 +128,26 @@ proc testHelpers::EchoInput {} {
   }
 
   puts -nonewline $remoteChannel "ECHO: $dataIn"
+}
+
+
+proc testHelpers::DecrInput {} {
+  variable remoteChannel
+  if {[catch {read $remoteChannel} dataIn options] || $dataIn eq ""} {
+    closeRemote
+    return
+  }
+
+  set bytes [split $dataIn {}]
+  set dataOut [
+    binary format c* [
+      lmap byte $bytes {
+        binary scan $byte c signedByte
+        set unsignedByte [expr {$signedByte & 0xff}]
+        expr {$unsignedByte - 1}
+      }
+    ]
+  ]
+
+  puts -nonewline $remoteChannel $dataOut
 }
