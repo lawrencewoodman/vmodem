@@ -186,8 +186,6 @@ proc modem::Dial {adtLine} {
   logger::log info $logMsg
   set transportInst [dict get $transport $type]
   $transportInst connect $hostname $port
-
-  puts "NO CARRIER"
 }
 
 
