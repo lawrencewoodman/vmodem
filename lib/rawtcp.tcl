@@ -9,20 +9,29 @@ package require TclOO
 
 ::oo::class create RawTcp {
   variable state
-  variable oldStdinConfig oldStdoutConfig
-  variable oldStdinReadableEventScript
-  variable inBoundChannel
+  variable oldLocalInConfig
+  variable oldLocalOutConfig
+  variable oldLocalInReadableEventScript
+  variable remoteChannel
   variable serverChannel
+  variable localInChannel
+  variable localOutChannel
   variable ringOnConnect
   variable waitForAta
+  variable pulseDelay
+  variable pulseScript
 
-  constructor {_ringOnConnect _waitForAta} {
+  constructor {_localInChannel _localOutChannel _ringOnConnect _waitForAta} {
+    set localInChannel $_localInChannel
+    set localOutChannel $_localOutChannel
     set ringOnConnect $_ringOnConnect
     set waitForAta $_waitForAta
 
     set state closed
-    set inBoundChannel {}
+    set remoteChannel {}
     set serverChannel {}
+    set pulseDelay 0
+    set pulseScript {}
   }
 
 
@@ -41,54 +50,97 @@ package require TclOO
 
 
   method completeInbondConnection {} {
-    if {[catch {my connect $inBoundChannel}]} {
-      puts "NO CARRIER"
+    if {[catch {my connect}]} {
+      puts $localOutChannel "NO CARRIER"
     }
   }
 
 
   method connect {args} {
-    set usage ": connect hostname port\n  connect incomingChannel"
+    set usage ": connect hostname port\n  connect"
     set numArgs [llength $args]
 
     set state connecting
-    set oldStdinConfig [chan configure stdin]
-    set oldStdoutConfig [chan configure stdout]
-    set oldStdinReadableEventScript [
-      chan event stdin readable
-    ]
-    set selfNamespace [self namespace]
 
-    if {$numArgs == 1} {
-      lassign $args fid
-    } elseif {$numArgs == 2} {
+    if {$numArgs == 2} {
       lassign $args hostname port
-      set fid [socket -async $hostname $port]
-    } else {
+      try {
+        set remoteChannel [socket $hostname $port]
+      } on error {} {
+        puts $localOutChannel "NO CARRIER"
+        return
+      }
+    } elseif {$numArgs != 0} {
       puts stderr $usage
       return -code error "Wrong number of arguments"
     }
 
-    chan configure $fid -translation binary -blocking 0 -buffering none
-    chan configure stdin -translation binary -blocking 0 -buffering none
-    chan configure stdout -translation binary -blocking 0 -buffering none
-    chan event $fid writable [list ${selfNamespace}::my Connected $fid]
-    chan event $fid readable [
-      list ${selfNamespace}::my ReceiveFromRemote $fid
-    ]
-    chan event stdin readable [
-      list ${selfNamespace}::my SendLocalToRemote $fid
-    ]
+    my ConfigChannels
+    my MaintainConnection
+  }
 
-    while {$state ne "closed"} {
-      vwait ${selfNamespace}::state
+
+  method setPulseDelay {delay} {
+    set pulseDelay $delay
+  }
+
+
+  method setPulseScript {script} {
+    set pulseScript $script
+  }
+
+
+  method isConnected {} {
+    expr {$state eq "open"}
+  }
+
+
+  method close {} {
+    if {$state ne "closed"} {
+      close $remoteChannel
+      chan configure $localInChannel {*}$oldLocalInConfig
+      chan configure $localOutChannel {*}$oldLocalOutConfig
+      chan event $localInChannel readable $oldLocalInReadableEventScript
+      set state closed
     }
   }
 
 
-  method getFromRemote {fid} {
-    if {[catch {read $fid} dataIn] || $dataIn eq ""} {
-      my Close $fid
+  ############################
+  # Private methods
+  ############################
+
+  method MaintainConnection {} {
+    set selfNamespace [self namespace]
+    my ScheduleNextPulse
+
+    while {$state ne "closed"} {
+      if {$state ne "pulse"} {
+        set oldState $state
+      }
+      if {$state eq "pulse"} {
+        set state $oldState
+        uplevel 2 $pulseScript
+        my ScheduleNextPulse
+      }
+      if {$state ne "closed"} {
+        vwait ${selfNamespace}::state
+      }
+    }
+
+    puts $localOutChannel "NO CARRIER"
+  }
+
+  method ScheduleNextPulse {} {
+    if {$pulseDelay == 0} {return}
+    set selfNamespace [self namespace]
+    after $pulseDelay [list set ${selfNamespace}::state "pulse"]
+  }
+
+
+  method GetFromRemote {} {
+    if {[catch {read $remoteChannel} dataIn] || $dataIn eq ""} {
+      my close
       logger::log notice "Couldn't read from remote host, closing connection"
       return
     }
@@ -109,26 +161,49 @@ package require TclOO
   }
 
 
+  method ConfigChannels {} {
+    set selfNamespace [self namespace]
+    set oldLocalInConfig [chan configure $localInChannel]
+    set oldLocalOutConfig [chan configure $localOutChannel]
+    set oldLocalInReadableEventScript [
+      chan event $localInChannel readable
+    ]
 
-  ############################
-  # Private methods
-  ############################
+    chan configure $remoteChannel -translation binary \
+                                  -blocking 0 \
+                                  -buffering none
+    chan configure $localInChannel -translation binary \
+                                   -blocking 0 \
+                                   -buffering none
+    chan configure $localOutChannel -translation binary \
+                                    -blocking 0 \
+                                    -buffering none
+    chan event $remoteChannel writable [list ${selfNamespace}::my Connected]
+    chan event $remoteChannel readable [
+      list ${selfNamespace}::my ReceiveFromRemote
+    ]
+    chan event $localInChannel readable [
+      list ${selfNamespace}::my SendLocalToRemote
+    ]
 
-  method SendLocalToRemote {fid} {
-    if {[catch {read stdin} dataFromStdin]} {
-      return -code error "Couldn't read from stdin"
+  }
+
+
+  method SendLocalToRemote {} {
+    if {[catch {read $localInChannel} dataFromStdin]} {
+      return -code error "Couldn't read from local: $localInChannel"
     }
 
     lassign [my ProcessLocalDataBeforeSending $dataFromStdin] \
             dataToSend \
             logMsg
 
-    my sendData $fid $dataToSend
+    my sendData $dataToSend
     logger::log -noheader $logMsg
   }
 
 
-  method sendData {fid dataOut} {
+  method sendData {dataOut} {
     set bytesOut [split $dataOut {}]
     set numBytes [llength $bytesOut]
     if {$numBytes == 0} {
@@ -137,8 +212,8 @@ package require TclOO
 
     logger::log info "local > remote: length $numBytes"
 
-    if {[catch {puts -nonewline $fid $dataOut}]} {
-      my Close $fid
+    if {[catch {puts -nonewline $remoteChannel $dataOut}]} {
+      my close
       logger::log notice "Couldn't write to remote host, closing connection"
       return
     }
@@ -152,31 +227,21 @@ package require TclOO
   }
 
 
-  method Close {fid} {
-    if {$state ne "closed"} {
-      close $fid
-      chan configure stdin {*}$oldStdinConfig
-      chan configure stdout {*}$oldStdoutConfig
-      chan event stdin readable $oldStdinReadableEventScript
-      set state closed
-      puts "NO CARRIER"
-    }
+
+
+  method ReceiveFromRemote {} {
+    puts -nonewline $localOutChannel [my GetFromRemote]
   }
 
 
-  method ReceiveFromRemote {fid} {
-    puts -nonewline [my getFromRemote $fid]
-  }
+  method Connected {} {
+    chan event $remoteChannel writable {}
 
-
-  method Connected {fid} {
-    chan event $fid writable {}
-
-    if {[dict exists [chan configure $fid] -peername]} {
-      set peername [dict get [chan configure $fid] -peername]
+    if {[dict exists [chan configure $remoteChannel] -peername]} {
+      set peername [dict get [chan configure $remoteChannel] -peername]
       logger::log info "Connected to $peername"
       ::modem::changeMode "on-line"
-      puts "CONNECT $::modem::speed"
+      puts $localOutChannel "CONNECT $::modem::speed"
       set state open
     }
   }
@@ -186,12 +251,12 @@ package require TclOO
     my stopListening
 
     if {$ringOnConnect} {
-      puts "RING"
+      puts $localOutChannel "RING"
     }
 
     if {$waitForAta} {
       logger::log info "Recevied connection from: $addr, waiting for ATA"
-      set inBoundChannel $channel
+      set remoteChannel $channel
     } else {
       logger::log info "Recevied connection from: $addr"
       my connect $channel

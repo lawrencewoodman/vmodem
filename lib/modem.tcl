@@ -26,8 +26,10 @@ proc modem::emulateModem {_config} {
 
   dict with config {
     set transport [
-      dict create telnet [Telnet new $ring_on_connect $wait_for_ata] \
-                  rawtcp [RawTcp new $ring_on_connect $wait_for_ata]
+      dict create telnet [Telnet new stdin stdout \
+                                     $ring_on_connect $wait_for_ata] \
+                  rawtcp [RawTcp new stdin stdout \
+                                     $ring_on_connect $wait_for_ata]
     ]
     set problem [
       catch {

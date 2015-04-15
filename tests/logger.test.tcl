@@ -14,6 +14,6 @@ test dumpBytes-1 {Returns correctly formatted dump} -setup {
 } -body {
   logger::dumpBytes $bytes
 } -result {    0x0000:  6865 6c6c 6f20 686f 7720 6172 6520 796f  hello how are yo
- 0x0010: 750d                                     u.}
+    0x0010:  750d                                     u.}
 
 cleanupTests

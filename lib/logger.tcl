@@ -6,6 +6,7 @@
 # Licensed under an MIT licence.  Please see LICENCE.md for details.
 #
 namespace eval logger {
+  package require cmdline
   variable logFID
   variable active 0
 }

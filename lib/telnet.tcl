@@ -12,9 +12,10 @@ package require TclOO
 ::oo::class create Telnet {
   superclass RawTcp
   variable telnetCommandIn telnetCommandsOut
+  variable localOutChannel
 
-  constructor {_ringOnConnect _waitForAta} {
-    next $_ringOnConnect $_waitForAta
+  constructor {_localInChannel _localOutChannel _ringOnConnect _waitForAta} {
+    next $_localInChannel $_localOutChannel $_ringOnConnect $_waitForAta
     set telnetCommandIn [list]
     set telnetCommandsOut [list]
   }
@@ -29,9 +30,9 @@ package require TclOO
   # Private methods
   ############################
 
-  method ReceiveFromRemote {fid} {
+  method ReceiveFromRemote {} {
     set IAC 255
-    set dataIn [my getFromRemote $fid]
+    set dataIn [my GetFromRemote]
     set bytesIn [split $dataIn {}]
 
     foreach ch $bytesIn {
@@ -41,15 +42,15 @@ package require TclOO
         if {$unsignedByte == $IAC} {
           lappend telnetCommandIn $unsignedByte
         } else {
-          puts -nonewline $ch
+          puts -nonewline $localOutChannel $ch
         }
       } else {
         lappend telnetCommandIn $unsignedByte
-        my HandleTelnetCommand $fid
+        my HandleTelnetCommand
       }
     }
 
-    my SendTelnetCommands $fid
+    my SendTelnetCommands
   }
 
 
@@ -80,7 +81,7 @@ package require TclOO
   }
 
 
-  method NegotiateTelnetOptions {fid command option} {
+  method NegotiateTelnetOptions {command option} {
     set WILL 251
     set WONT 252
     set DO 253
@@ -101,7 +102,7 @@ package require TclOO
   }
 
 
-  method HandleTelnetCommand {fid} {
+  method HandleTelnetCommand {} {
     set commandCodes {251 252 253 254}
     set telnetCommandInLength [llength $telnetCommandIn]
     set humanReadableCommand [my MakeTelnetCommandReadable $telnetCommandIn]
@@ -115,13 +116,13 @@ package require TclOO
         # IAC escapes IAC, so if you want to send or receive 255 then you need to
         # send IAC twice
         set binaryIAC [binary format c $IAC]
-        puts -nonewline $binaryIAC
+        puts -nonewline $localOutChannel $binaryIAC
         set telnetCommandIn [list]
       } elseif {$byte2 in $commandCodes} {
         if {$telnetCommandInLength == 3} {
           logger::log -noheader "    Telnet command: $humanReadableCommand"
           set option [lindex $telnetCommandIn 2]
-          my NegotiateTelnetOptions $fid $byte2 $option
+          my NegotiateTelnetOptions $byte2 $option
           set telnetCommandIn [list]
         }
       } else {
@@ -131,7 +132,7 @@ package require TclOO
   }
 
 
-  method SendTelnetCommands {fid} {
+  method SendTelnetCommands {} {
     set bytesToSend [list]
     set logMsg ""
 
@@ -143,7 +144,7 @@ package require TclOO
       append logMsg "    Telnet command: $humanReadableCommand\n"
     }
 
-    my sendData $fid [join $bytesToSend {}]
+    my sendData [join $bytesToSend {}]
 
     if {$logMsg ne ""} {
       logger::log -noheader [string trimright $logMsg]
@@ -162,6 +163,7 @@ package require TclOO
     foreach byte $bytesIn {
       binary scan $byte c signedByte
       set unsignedByte [expr {$signedByte & 0xff}]
+
       if {$unsignedByte == $IAC} {
         # Escape IAC by sending twice
         lappend bytesOut {*}[binary format c2 [list $IAC $IAC]]
@@ -179,6 +181,7 @@ package require TclOO
 
     list [join $bytesOut {}] $logMsg
   }
+
 
   method ProcessLocalDataBeforeSending {dataIn} {
     my EscapeIACs $dataIn
