@@ -1,12 +1,11 @@
 # Chat helper functions for the tests
 
 namespace eval chatter {
-  variable msg ""
-  variable stage 0
   variable dataIn {}
   variable numDataIn 0
   variable inChannel
   variable outChannel
+  variable pulse
 }
 
 
@@ -49,79 +48,92 @@ proc chatter::close {} {
 }
 
 
-proc chatter::chat {chatScript closeScript transport} {
-  variable msg
-  variable stage
+proc chatter::chat {chatScript} {
   variable inWrite
   variable outRead
-
+  variable pulse
   set maxStage [expr {[llength $chatScript] - 1}]
-  set chatLine [lindex $chatScript $stage]
-  lassign $chatLine action text
+  set stage 0
+  set pulse 0
+  set finished 0
+
+  while {!$finished} {
+    after 10 [list set ::chatter::pulse 1]
+    vwait ::chatter::pulse
+    set pulse 0
+
+    set chatLine [lindex $chatScript $stage]
+    lassign $chatLine action text
+    lassign [handleAction $action $text $stage] stage msg
+
+    if {$stage > $maxStage && $msg eq ""} {
+      set msg "no errors"
+    }
+
+    if {$msg ne ""} {
+      set finished 1
+    }
+  }
+
+  return $msg
+}
+
+
+proc chatter::handleAction {action text stage} {
+  variable inWrite
+  set msg ""
 
   switch $action {
     send {
       puts -nonewline $inWrite $text
+      incr stage
+
     }
     sendBinary {
-        puts -nonewline $inWrite [binary format c* $text]
+      puts -nonewline $inWrite [binary format c* $text]
+      incr stage
     }
     expect {
       set dataIn [string trim [ReadData]]
-      if {$dataIn ne $text} {
-        set msg "stage: $stage expecting: $text, got: $dataIn"
+      if {$dataIn ne ""} {
+        if {$dataIn ne $text} {
+          set msg "stage: $stage expecting: $text, got: $dataIn"
+        }
+        incr stage
       }
     }
     expectBinary {
       set dataIn [ReadData]
-      binary scan $dataIn c* dataInText
-      set dataInText [
-        lmap byte $dataInText {
-          set unsignedByte [expr {$byte & 0xff}]
-          format {0x%02x} $unsignedByte
+      if {$dataIn ne ""} {
+        binary scan $dataIn c* dataInText
+        set dataInText [
+          lmap byte $dataInText {
+            set unsignedByte [expr {$byte & 0xff}]
+            format {0x%02x} $unsignedByte
+          }
+        ]
+        if {$dataInText ne $text} {
+          set msg "stage: $stage expecting binary: $text, got: $dataInText"
         }
-      ]
-      if {$dataInText ne $text} {
-        set msg "stage: $stage expecting binary: $text, got: $dataInText"
+        incr stage
       }
-    }
-    closeServer {
-      ::testHelpers::closeRemote
     }
     default {
       return -code error "Unknown action: $action"
     }
   }
 
-  incr stage
-
-  if {$stage > $maxStage && $msg eq ""} {
-    set msg "no errors"
-  }
-
-  if {$msg ne ""} {
-    uplevel 1 $closeScript
-    return
-  }
-}
-
-
-proc chatter::getMsg {} {
-  variable msg
-  return $msg
-}
-
-
-proc chatter::wait {} {
-  vwait ::chatter::numDataIn
+  return [list $stage $msg]
 }
 
 
 proc chatter::GetData {channel} {
   variable dataIn
   variable numDataIn
-  lappend dataIn [read $channel]
-  incr numDataIn
+  set data [read $channel]
+  set lines [split $data \n]
+  lappend dataIn {*}$lines
+  incr numDataIn [llength $lines]
 }
 
 
@@ -130,7 +142,7 @@ proc chatter::ReadData {} {
   variable numDataIn
 
   if {$numDataIn > 0} {
-    set data [lindex $dataIn end]
+    set data [lindex $dataIn 0]
     set dataIn [lrange $dataIn 1 end]
     binary scan $data c* dataText
     set dataText [

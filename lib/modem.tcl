@@ -109,6 +109,7 @@ proc modem::ProcessLine {} {
         set incoming_type [dict get $config incoming_type]
         set transportInst [dict get $transport $incoming_type]
         $transportInst completeInbondConnection
+        $transportInst maintainConnection
         ::modem::changeMode "command"
       }
 
@@ -186,6 +187,7 @@ proc modem::Dial {adtLine} {
   logger::log info $logMsg
   set transportInst [dict get $transport $type]
   $transportInst connect $hostname $port
+  $transportInst maintainConnection
 }
 
 

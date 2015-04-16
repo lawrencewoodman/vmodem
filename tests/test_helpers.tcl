@@ -52,6 +52,12 @@ proc testHelpers::rawEchoListen {{mode echo}} {
   }
 }
 
+proc testHelpers::connect {port} {
+  variable remoteChannel
+  set remoteChannel [socket localhost $port]
+  ::testHelpers::ConfigEchoConnection
+}
+
 
 proc testHelpers::stopListening {} {
   variable listenChannel

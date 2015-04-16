@@ -21,17 +21,12 @@ test connect-1 {Outputs CONNECT message to local when connected} -setup {
   set chatScript {
     {expect "CONNECT 1200"}
   }
-  set closeScript {
-    $rawTcp close
-    $rawTcp setPulseDelay 0
-    testHelpers::stopListening
-  }
-  $rawTcp setPulseDelay 10
-  $rawTcp setPulseScript [list chatter::chat $chatScript $closeScript $rawTcp]
 } -body {
   $rawTcp connect localhost $echoPort
-  chatter::getMsg
+  chatter::chat $chatScript
 } -cleanup {
+  $rawTcp close
+  testHelpers::stopListening
   testHelpers::closeRemote
   testHelpers::destroyFakeModem
   chatter::close
@@ -47,13 +42,9 @@ test connect-2 {Outputs NO CARRIER message to local when failed to connect} -set
   set chatScript {
     {expect "NO CARRIER"}
   }
-  set closeScript {
-  }
 } -body {
   $rawTcp connect localhost $unusedPort
-  chatter::wait
-  chatter::chat $chatScript $closeScript $rawTcp
-  chatter::getMsg
+  chatter::chat $chatScript
 } -cleanup {
   testHelpers::destroyFakeModem
   chatter::close
@@ -75,17 +66,12 @@ test connect-3 {Check can send and receive data} -setup {
     {sendBinary {0x23 0xff 0x44}}
     {expectBinary {0x45 0x43 0x48 0x4f 0x3a 0x20 0x23 0xff 0x44}}
   }
-  set closeScript {
-    $rawTcp close
-    $rawTcp setPulseDelay 0
-    testHelpers::stopListening
-  }
-  $rawTcp setPulseDelay 10
-  $rawTcp setPulseScript [list chatter::chat $chatScript $closeScript $rawTcp]
 } -body {
   $rawTcp connect localhost $echoPort
-  chatter::getMsg
+  chatter::chat $chatScript
 } -cleanup {
+  $rawTcp close
+  testHelpers::stopListening
   testHelpers::closeRemote
   testHelpers::destroyFakeModem
   chatter::close
@@ -100,24 +86,79 @@ test connect-4 {Check detects when remote connection has dropped and send a NO C
   set rawTcp [RawTcp new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}
-    {send "this was sent from local"}
-    {expect "ECHO: this was sent from local"}
-    {closeServer {}}
     {expect "NO CARRIER"}
   }
-  set closeScript {
-    $rawTcp close
-    $rawTcp setPulseDelay 0
-    testHelpers::stopListening
-  }
-  $rawTcp setPulseDelay 10
-  $rawTcp setPulseScript [list chatter::chat $chatScript $closeScript $rawTcp]
 } -body {
   $rawTcp connect localhost $echoPort
-  chatter::wait
-  chatter::chat $chatScript $closeScript $rawTcp
-  chatter::getMsg
+  after 100 ::testHelpers::closeRemote
+  $rawTcp maintainConnection
+  chatter::chat $chatScript
 } -cleanup {
+  $rawTcp close
+  testHelpers::stopListening
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test listen-1 {Outputs CONNECT message to local when connected} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set rawTcp [RawTcp new $inRead $outWrite 0 0]
+  set chatScript {
+    {expect "CONNECT 1200"}
+  }
+} -body {
+  set foundPort 0
+  set port 1024
+
+  while {!$foundPort} {
+    try {
+      $rawTcp listen $port
+      set foundPort 1
+    } on error {} {
+      incr port
+    }
+  }
+
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $rawTcp close
+  testHelpers::closeRemote
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test listen-2 {Outputs RING message to local when receives connection if requested} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set rawTcp [RawTcp new $inRead $outWrite 1 0]
+  set chatScript {
+    {expect "RING"}
+    {expect "CONNECT 1200"}
+  }
+} -body {
+  set foundPort 0
+  set port 1024
+
+  while {!$foundPort} {
+    try {
+      $rawTcp listen $port
+      set foundPort 1
+    } on error {} {
+      incr port
+    }
+  }
+
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $rawTcp close
+  testHelpers::closeRemote
   testHelpers::destroyFakeModem
   chatter::close
 } -result {no errors}

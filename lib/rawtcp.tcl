@@ -18,8 +18,6 @@ package require TclOO
   variable localOutChannel
   variable ringOnConnect
   variable waitForAta
-  variable pulseDelay
-  variable pulseScript
 
   constructor {_localInChannel _localOutChannel _ringOnConnect _waitForAta} {
     set localInChannel $_localInChannel
@@ -30,8 +28,6 @@ package require TclOO
     set state closed
     set remoteChannel {}
     set serverChannel {}
-    set pulseDelay 0
-    set pulseScript {}
   }
 
 
@@ -74,19 +70,7 @@ package require TclOO
       puts stderr $usage
       return -code error "Wrong number of arguments"
     }
-
     my ConfigChannels
-    my MaintainConnection
-  }
-
-
-  method setPulseDelay {delay} {
-    set pulseDelay $delay
-  }
-
-
-  method setPulseScript {script} {
-    set pulseScript $script
   }
 
 
@@ -106,37 +90,21 @@ package require TclOO
   }
 
 
-  ############################
-  # Private methods
-  ############################
-
-  method MaintainConnection {} {
+  method maintainConnection {} {
     set selfNamespace [self namespace]
-    my ScheduleNextPulse
 
     while {$state ne "closed"} {
-      if {$state ne "pulse"} {
-        set oldState $state
-      }
-      if {$state eq "pulse"} {
-        set state $oldState
-        uplevel 2 $pulseScript
-        my ScheduleNextPulse
-      }
-      if {$state ne "closed"} {
-        vwait ${selfNamespace}::state
-      }
+      vwait ${selfNamespace}::state
     }
 
     puts $localOutChannel "NO CARRIER"
   }
 
-  method ScheduleNextPulse {} {
-    if {$pulseDelay == 0} {return}
-    set selfNamespace [self namespace]
-    after $pulseDelay [list set ${selfNamespace}::state "pulse"]
-  }
 
+
+  ############################
+  # Private methods
+  ############################
 
   method GetFromRemote {} {
     if {[catch {read $remoteChannel} dataIn] || $dataIn eq ""} {
@@ -185,7 +153,6 @@ package require TclOO
     chan event $localInChannel readable [
       list ${selfNamespace}::my SendLocalToRemote
     ]
-
   }
 
 
@@ -254,12 +221,12 @@ package require TclOO
       puts $localOutChannel "RING"
     }
 
+    set remoteChannel $channel
     if {$waitForAta} {
       logger::log info "Recevied connection from: $addr, waiting for ATA"
-      set remoteChannel $channel
     } else {
       logger::log info "Recevied connection from: $addr"
-      my connect $channel
+      my connect
     }
   }
 
