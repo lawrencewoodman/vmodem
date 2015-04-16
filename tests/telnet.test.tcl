@@ -151,4 +151,67 @@ test connect-6 {Check will recognize escaped 0xFF when received} -setup {
 } -result {no errors}
 
 
+test listen-1 {Outputs CONNECT message to local when connected} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set telnet [Telnet new $inRead $outWrite 0 0]
+  set chatScript {
+    {expect "CONNECT 1200"}
+  }
+} -body {
+  set foundPort 0
+  set port 1024
+
+  while {!$foundPort} {
+    try {
+      $telnet listen $port
+      set foundPort 1
+    } on error {} {
+      incr port
+    }
+  }
+
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $telnet close
+  testHelpers::closeRemote
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test listen-2 {Outputs RING message to local when receives connection if requested} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  set telnet [Telnet new $inRead $outWrite 1 0]
+  set chatScript {
+    {expect "RING"}
+    {expect "CONNECT 1200"}
+  }
+} -body {
+  set foundPort 0
+  set port 1024
+
+  while {!$foundPort} {
+    try {
+      $telnet listen $port
+      set foundPort 1
+    } on error {} {
+      incr port
+    }
+  }
+
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $telnet close
+  testHelpers::closeRemote
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
 cleanupTests
