@@ -103,7 +103,8 @@ proc chatter::handleAction {action text stage} {
       }
     }
     expectBinary {
-      set dataIn [ReadData]
+      set expectedNumBytes [llength $text]
+      set dataIn [ReadData $expectedNumBytes]
       if {$dataIn ne ""} {
         binary scan $dataIn c* dataInText
         set dataInText [
@@ -131,29 +132,40 @@ proc chatter::GetData {channel} {
   variable dataIn
   variable numDataIn
   set data [read $channel]
-  set lines [split $data \n]
-  lappend dataIn {*}$lines
-  incr numDataIn [llength $lines]
+  set numLinesIn 0
+
+  foreach line [split $data "\n"] {
+    if {$line ne ""} {
+      lappend dataIn $line
+      incr numDataIn
+    }
+  }
 }
 
 
-proc chatter::ReadData {} {
+proc chatter::ReadData {{numBytes 0}} {
   variable dataIn
   variable numDataIn
 
   if {$numDataIn > 0} {
     set data [lindex $dataIn 0]
-    set dataIn [lrange $dataIn 1 end]
-    binary scan $data c* dataText
-    set dataText [
-      lmap b $dataText {
-        set unsignedByte [expr {$b & 0xff}]
-        format {%02x} $unsignedByte
-      }
-    ]
+    if {$numBytes == 0} {
+      set dataToReturn $data
+      set dataIn [lrange $dataIn 1 end]
+      incr numDataIn -1
+    } else {
+      set dataToReturn [string range $data 0 [expr {$numBytes - 1}]]
+      set dataLeft [string range $data $numBytes end]
 
-    incr numDataIn -1
-    return $data
+      if {$dataLeft ne ""} {
+        lset dataIn 0 $dataLeft
+      } else {
+        set dataIn [lrange $dataIn 1 end]
+        incr numDataIn -1
+      }
+    }
+
+    return $dataToReturn
   } else {
     return ""
   }

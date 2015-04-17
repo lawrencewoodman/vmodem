@@ -62,11 +62,11 @@ test connect-3 {Check can send and receive data} -setup {
   set chatScript {
     {expect "CONNECT 1200"}
     {send "this was sent from local"}
-    {expect "ECHO: this was sent from local"}
+    {expect "this was sent from local"}
     {send "so was this"}
-    {expect "ECHO: so was this"}
+    {expect "so was this"}
     {sendBinary {0x23 0xff 0x44}}
-    {expectBinary {0x45 0x43 0x48 0x4f 0x3a 0x20 0x23 0xff 0x44}}
+    {expectBinary {0x23 0xff 0x44}}
   }
 } -body {
   $telnet connect localhost $echoPort
@@ -139,6 +139,48 @@ test connect-6 {Check will recognize escaped 0xFF when received} -setup {
     {sendBinary {0x23 0x00 0x00 0x44}}
     {expectBinary {0x22 0xff 0x43}}
   }
+} -body {
+  $telnet connect localhost $echoPort
+  chatter::chat $chatScript
+} -cleanup {
+  $telnet close
+  testHelpers::stopListening
+  testHelpers::closeRemote
+  testHelpers::destroyFakeModem
+  chatter::close
+} -result {no errors}
+
+
+test connect-7 {Will handle telnet negotations properly and ensure that server WILL ECHO} -setup {
+  testHelpers::createFakeModem
+
+  lassign [chatter::init] inRead outWrite
+  # This server will negotiate telnet options, but will escape any IACs
+  # and send them back for reviewing.
+  set echoPort [testHelpers::rawEchoListen telnet]
+  set telnet [Telnet new $inRead $outWrite 0 0]
+
+  set telnetCodesMap {
+    {WILL } {0xfb }
+    {WONT } {0xfc }
+    {DO } {0xfd }
+    {DONT } {0xfe }
+    {IAC } {0xff }
+    {ECHO} 0x01
+    {SUPRESS_GO_AHEAD} 0x03
+    {LINEMODE} 0x34
+  }
+  set chatScript [
+    string map $telnetCodesMap {
+                 {expect {CONNECT 1200}}
+                 {expectBinary {IAC DO ECHO}}
+                 {expectBinary {IAC DO ECHO}}
+                 {expectBinary {IAC DONT SUPRESS_GO_AHEAD}}
+                 {expectBinary {IAC WONT LINEMODE}}
+                 {send {hello}}
+                 {expect {hello}}
+               }
+  ]
 } -body {
   $telnet connect localhost $echoPort
   chatter::chat $chatScript

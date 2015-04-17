@@ -90,15 +90,27 @@ package require TclOO
 
     set ECHO 1
 
-    if {$command == $WILL} {
-      if {$option == $ECHO} {
-        lappend telnetCommandsOut [list $IAC $DO $ECHO]
-      } else {
-        lappend telnetCommandsOut [list $IAC $DONT $option]
+    switch $command  \
+      $WILL {
+        if {$option == $ECHO} {
+          lappend telnetCommandsOut [list $IAC $DO $ECHO]
+        } else {
+          lappend telnetCommandsOut [list $IAC $DONT $option]
+        }
+      } \
+      $WONT {
+        if {$option == $ECHO} {
+          lappend telnetCommandsOut [list $IAC $DO $ECHO]
+        } else {
+          lappend telnetCommandsOut [list $IAC $DONT $option]
+        }
+      } \
+      $DO {
+        lappend telnetCommandsOut [list $IAC $WONT $option]
+      } \
+      $DONT {
+        lappend telnetCommandsOut [list $IAC $WONT $option]
       }
-    } elseif {$command == $DO || $byte2 == $DONT} {
-      lappend telnetCommandsOut [list $IAC $WONT $option]
-    }
   }
 
 

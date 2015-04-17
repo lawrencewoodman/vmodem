@@ -92,10 +92,10 @@ proc testHelpers::ServiceIncomingConnection {mode channel addr port} {
   variable remoteChannel
   set remoteChannel $channel
 
-  if {$mode eq "echo"} {
-    ::testHelpers::ConfigEchoConnection
-  } else {
-    ::testHelpers::ConfigDecrConnection
+  switch $mode {
+    echo {::testHelpers::ConfigEchoConnection}
+    decr {::testHelpers::ConfigDecrConnection}
+    telnet {::testHelpers::ConfigTelnetConnection}
   }
 }
 
@@ -120,9 +120,51 @@ proc testHelpers::ConfigDecrConnection {} {
 }
 
 
-proc testHelpers::Connected {} {
+proc testHelpers::ConfigTelnetConnection {} {
+  variable remoteChannel
+  chan configure $remoteChannel -translation binary \
+                                -blocking 0 \
+                                -buffering none
+  chan event $remoteChannel writable {::testHelpers::Connected 1}
+  chan event $remoteChannel readable ::testHelpers::EchoEscapedTelnetInput
+}
+
+
+proc testHelpers::Connected {{doTelnetNegotation 0}} {
   variable remoteChannel
   chan event $remoteChannel writable {}
+
+  if {$doTelnetNegotation} {
+    NegotiateTelnetOptions
+  }
+}
+
+
+proc testHelpers::NegotiateTelnetOptions {} {
+  variable remoteChannel
+
+  set telnetCodesMap {
+    {WILL } {0xfb }
+    {WONT } {0xfc }
+    {DO } {0xfd }
+    {DONT } {0xfe }
+    {IAC } {0xff }
+    {ECHO} 0x01
+    {SUPRESS_GO_AHEAD} 0x03
+    {LINEMODE} 0x34
+  }
+  set commands {
+    {IAC WILL ECHO}
+    {IAC WONT ECHO}
+    {IAC WILL SUPRESS_GO_AHEAD}
+    {IAC DO LINEMODE}
+  }
+  set commandsBytes [string map $telnetCodesMap $commands]
+
+  foreach command $commandsBytes {
+    set dataOut [binary format c* $command]
+    puts -nonewline $remoteChannel $dataOut
+  }
 }
 
 
@@ -133,7 +175,7 @@ proc testHelpers::EchoInput {} {
     return
   }
 
-  puts -nonewline $remoteChannel "ECHO: $dataIn"
+  puts -nonewline $remoteChannel "$dataIn"
 }
 
 
@@ -155,5 +197,33 @@ proc testHelpers::DecrInput {} {
     ]
   ]
 
+  puts -nonewline $remoteChannel $dataOut
+}
+
+
+proc testHelpers::EchoEscapedTelnetInput {} {
+  variable remoteChannel
+
+  if {[catch {read $remoteChannel} dataIn options] || $dataIn eq ""} {
+    closeRemote
+    return
+  }
+
+  set IAC 0xff
+
+  set bytes [split $dataIn {}]
+  set bytesOut [list]
+
+  foreach byte $bytes {
+    binary scan $byte c signedByte
+    set unsignedByte [expr {$signedByte & 0xff}]
+
+    if {$unsignedByte == $IAC} {
+      lappend bytesOut $IAC
+    }
+    lappend bytesOut $unsignedByte
+  }
+
+  set dataOut [binary format c* $bytesOut]
   puts -nonewline $remoteChannel $dataOut
 }

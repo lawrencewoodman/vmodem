@@ -60,11 +60,11 @@ test connect-3 {Check can send and receive data} -setup {
   set chatScript {
     {expect "CONNECT 1200"}
     {send "this was sent from local"}
-    {expect "ECHO: this was sent from local"}
+    {expect "this was sent from local"}
     {send "so was this"}
-    {expect "ECHO: so was this"}
+    {expect "so was this"}
     {sendBinary {0x23 0xff 0x44}}
-    {expectBinary {0x45 0x43 0x48 0x4f 0x3a 0x20 0x23 0xff 0x44}}
+    {expectBinary {0x23 0xff 0x44}}
   }
 } -body {
   $rawTcp connect localhost $echoPort
