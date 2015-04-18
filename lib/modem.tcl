@@ -99,12 +99,12 @@ proc modem::ProcessLine {} {
       set msg "Received line:\n[::logger::dumpBytes $bytes]"
     }
     switch -regexp $line {
-      {(?i)^atd[tp"]?.*$} { ;#"
+      {(?i)^at\s*d[tp"]?.*$} { ;#"
         puts "OK"
         Dial $line
         ::modem::changeMode "command"
       }
-      {(?i)^ata} {
+      {(?i)^at\s*a} {
         puts "OK"
         set incoming_type [dict get $config incoming_type]
         set transportInst [dict get $transport $incoming_type]
@@ -154,18 +154,18 @@ proc modem::Dial {atdLine} {
   variable speed
   variable transport
 
-  if {[regexp {(?i)^atd".*:\d+$} $atdLine]} { ; #"
-    set hostname [regsub {(?i)^(atd")(.*):(\d+)$} $atdLine {\2}] ; #"
-    set port [regsub {(?i)^(atd")(.*):(\d+)$} $atdLine {\3}] ; #"
+  if {[regexp {(?i)^at\s*d".*:\d+$} $atdLine]} { ; #"
+    set hostname [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\2}] ; #"
+    set port [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\3}] ; #"
     set type "telnet"
     set logMsg "Emulating dialing by telnetting to $hostname:$port"
-  } elseif {[regexp {(?i)^atd".*$} $atdLine]} { ; #"
-    set hostname [regsub {(?i)^(atd")(.*)$} $atdLine {\2}] ; #"
+  } elseif {[regexp {(?i)^at\s*d".*$} $atdLine]} { ; #"
+    set hostname [regsub {(?i)^(at\s*d")(.*)$} $atdLine {\2}] ; #"
     set port 23
     set type "telnet"
     set logMsg "Emulating dialing by telnetting to $hostname:$port"
   } else {
-    set phoneNumber [regsub {(?i)^(atd[tp]?)(.*)$} $atdLine {\2}]
+    set phoneNumber [regsub {(?i)^(at\s*d[tp]?)(.*)$} $atdLine {\2}]
     set details [GetPhoneNumberDetails $phoneNumber]
 
     if {$details eq {}} {
