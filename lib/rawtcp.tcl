@@ -56,20 +56,19 @@ package require TclOO
     set usage ": connect hostname port\n  connect"
     set numArgs [llength $args]
 
-    set state connecting
-
     if {$numArgs == 2} {
       lassign $args hostname port
       try {
         set remoteChannel [socket $hostname $port]
       } on error {} {
-        puts $localOutChannel "NO CARRIER"
         return
       }
     } elseif {$numArgs != 0} {
       puts stderr $usage
       return -code error "Wrong number of arguments"
     }
+
+    set state connecting
     my ConfigChannels
   }
 

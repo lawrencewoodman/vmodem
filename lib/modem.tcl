@@ -149,18 +149,23 @@ proc modem::DictGetWithDefault {dictionary key default} {
 }
 
 
-proc modem::Dial {adtLine} {
+proc modem::Dial {atdLine} {
   global phonebook
   variable speed
   variable transport
 
-  if {[regexp {(?i)^atd".*$} $adtLine]} { ; #"
-    set hostname [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\2}] ; #"
-    set port [regsub {(?i)^(atd")(.*),(\d+)$} $adtLine {\3}] ; #"
+  if {[regexp {(?i)^atd".*:\d+$} $atdLine]} { ; #"
+    set hostname [regsub {(?i)^(atd")(.*):(\d+)$} $atdLine {\2}] ; #"
+    set port [regsub {(?i)^(atd")(.*):(\d+)$} $atdLine {\3}] ; #"
     set type "telnet"
-    logger::log info "Emulating dialing by telnetting to $hostname:$port"
+    set logMsg "Emulating dialing by telnetting to $hostname:$port"
+  } elseif {[regexp {(?i)^atd".*$} $atdLine]} { ; #"
+    set hostname [regsub {(?i)^(atd")(.*)$} $atdLine {\2}] ; #"
+    set port 23
+    set type "telnet"
+    set logMsg "Emulating dialing by telnetting to $hostname:$port"
   } else {
-    set phoneNumber [regsub {(?i)^(atd[tp]?)(.*)$} $adtLine {\2}]
+    set phoneNumber [regsub {(?i)^(atd[tp]?)(.*)$} $atdLine {\2}]
     set details [GetPhoneNumberDetails $phoneNumber]
 
     if {$details eq {}} {
@@ -174,15 +179,15 @@ proc modem::Dial {adtLine} {
     set port [dict get $details port]
     set speed [dict get $details speed]
     set type [dict get $details type]
+
+    if {$type eq "telnet"} {
+      set logMsg "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
+    } else {
+      set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
+    }
   }
 
   StopListening
-
-  if {$type eq "telnet"} {
-    set logMsg "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
-  } else {
-    set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
-  }
 
   logger::log info $logMsg
   set transportInst [dict get $transport $type]
