@@ -35,7 +35,7 @@ proc testHelpers::findUnusedPort {} {
 }
 
 
-proc testHelpers::rawEchoListen {{mode echo}} {
+proc testHelpers::listen {{mode echo}} {
   variable listenChannel
   set port 1024
 
@@ -55,20 +55,13 @@ proc testHelpers::rawEchoListen {{mode echo}} {
 proc testHelpers::connect {port} {
   variable remoteChannel
   set remoteChannel [socket localhost $port]
-  ::testHelpers::ConfigEchoConnection
+  ConfigEchoConnection
 }
 
 
 proc testHelpers::stopListening {} {
   variable listenChannel
   close $listenChannel
-}
-
-
-proc testHelpers::rawEchoConnect {port} {
-  variable remoteChannel
-  set remoteChannelhannel [socket -async $hostname $port]
-  ConfigEchoConnection
 }
 
 

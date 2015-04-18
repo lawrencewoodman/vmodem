@@ -16,7 +16,7 @@ test connect-1 {Outputs CONNECT message to local when connected} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set rawTcp [RawTcp new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}
@@ -55,7 +55,7 @@ test connect-3 {Check can send and receive data} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set rawTcp [RawTcp new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}
@@ -82,7 +82,7 @@ test connect-4 {Check detects when remote connection has dropped and send a NO C
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set rawTcp [RawTcp new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}

@@ -17,7 +17,7 @@ test connect-1 {Outputs CONNECT message to local when connected} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set telnet [Telnet new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}
@@ -56,7 +56,7 @@ test connect-3 {Check can send and receive data} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set telnet [Telnet new $inRead $outWrite 0 0]
 
   set chatScript {
@@ -84,7 +84,7 @@ test connect-4 {Check detects when remote connection has dropped and send a NO C
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen]
+  set echoPort [testHelpers::listen]
   set telnet [Telnet new $inRead $outWrite 0 0]
   set chatScript {
     {expect "CONNECT 1200"}
@@ -107,7 +107,7 @@ test connect-5 {Check will escape 0xFF when sent} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen decr]
+  set echoPort [testHelpers::listen decr]
   set telnet [Telnet new $inRead $outWrite 0 0]
 
   set chatScript {
@@ -131,7 +131,7 @@ test connect-6 {Check will recognize escaped 0xFF when received} -setup {
   testHelpers::createFakeModem
 
   lassign [chatter::init] inRead outWrite
-  set echoPort [testHelpers::rawEchoListen decr]
+  set echoPort [testHelpers::listen decr]
   set telnet [Telnet new $inRead $outWrite 0 0]
 
   set chatScript {
@@ -157,7 +157,7 @@ test connect-7 {Will handle telnet negotations properly and ensure that server W
   lassign [chatter::init] inRead outWrite
   # This server will negotiate telnet options, but will escape any IACs
   # and send them back for reviewing.
-  set echoPort [testHelpers::rawEchoListen telnet]
+  set echoPort [testHelpers::listen telnet]
   set telnet [Telnet new $inRead $outWrite 0 0]
 
   set telnetCodesMap {
