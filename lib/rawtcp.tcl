@@ -47,7 +47,7 @@ package require TclOO
 
   method completeInbondConnection {} {
     if {[catch {my connect}]} {
-      puts $localOutChannel "NO CARRIER"
+      set state closed
     }
   }
 
@@ -91,7 +91,6 @@ package require TclOO
 
   method maintainConnection {} {
     set selfNamespace [self namespace]
-
     while {$state ne "closed"} {
       vwait ${selfNamespace}::state
     }
