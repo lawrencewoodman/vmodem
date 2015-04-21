@@ -49,6 +49,11 @@
   }
 
 
+  method isOnline {} {
+    return true
+  }
+
+
   method ReceiveFromLocal {} {
     if {[catch {read $localInChannel} dataFromLocal]} {
       return -code error "Couldn't read from local"

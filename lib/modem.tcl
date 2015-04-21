@@ -35,6 +35,7 @@ source [file join $LibDir telnet.tcl]
     set line ""
     set speed 1200
     set transports {}
+    set currentTransport {}
     set escapeBuffer ""
     set lastLocalInputTime 0
 
@@ -142,6 +143,7 @@ source [file join $LibDir telnet.tcl]
     if {$mode eq "on-line"} {
       my sendToLocal "NO CARRIER\r\n"
     }
+    set currentTransport {}
     my changeMode "command"
     my listen
   }
@@ -164,6 +166,11 @@ source [file join $LibDir telnet.tcl]
         append line $ch
       }
     }
+  }
+
+
+  method isOnline {} {
+    expr {$mode eq "on-line"}
   }
 
 
@@ -200,6 +207,18 @@ source [file join $LibDir telnet.tcl]
           set currentTransport [dict get $transports $incomingType]
           $currentTransport completeInbondConnection
           my changeMode "command"
+        }
+
+        {(?i)^at\s*h0?} {
+          my sendToLocal "OK\r\n"
+          if {$currentTransport ne {}} {
+            my sendToLocal "NO CARRIER\r\n"
+            $currentTransport close
+          }
+        }
+
+        {(?i)^at\s*o1?} {
+          my changeMode "on-line"
         }
 
         {(?i)^at.*$} {

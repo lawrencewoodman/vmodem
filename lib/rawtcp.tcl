@@ -160,7 +160,9 @@ package require TclOO
 
 
   method ReceiveFromRemote {} {
-    $modem sendToLocal [my GetFromRemote]
+    if {[$modem isOnline]} {
+      $modem sendToLocal [my GetFromRemote]
+    }
   }
 
 

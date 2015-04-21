@@ -59,7 +59,7 @@ proc testHelpers::sendData {dataOut} {
 
 proc testHelpers::closeRemote {} {
   variable remoteChannel
-  close $remoteChannel
+  catch {close $remoteChannel}
 }
 
 

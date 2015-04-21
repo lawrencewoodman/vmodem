@@ -51,6 +51,7 @@ test constructor-2 {Recognize +++ and escape to command mode} -setup {
     {send "ath\r\n"}
     {expect "ath\r\n"}
     {expect "OK\r\n"}
+    {expect "NO CARRIER\r\n"}
   }
 } -body {
   testHelpers::connect $port
@@ -60,6 +61,44 @@ test constructor-2 {Recognize +++ and escape to command mode} -setup {
   chatter::close
 } -result {no errors}
 
+
+test constructor-3 {Ensure can resume a connect with ato from command mode} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+  }
+  set port [testHelpers::findUnusedPort]
+  dict set config incoming_port $port
+  lassign [chatter::init] inRead outWrite
+  set modem [Modem new $config $inRead $outWrite]
+  set chatScript {
+    {expect "RING\r\n"}
+    {expect "CONNECT 1200\r\n"}
+    {pause 1000}
+    {send "+++"}
+    {expect "+++"}
+    {send "atz\r\n"}
+    {expect "atz\r\n"}
+    {expect "OK\r\n"}
+    {send "ato\r\n"}
+    {expect "ato\r\n"}
+    {send "atz"}
+    {expect "atz"}
+    {pause 1000}
+    {send "+++ath0\r\n"}
+    {expect "+++ath0\r\n"}
+    {expect "OK\r\n"}
+    {expect "NO CARRIER\r\n"}
+  }
+} -body {
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
 
 
 cleanupTests
