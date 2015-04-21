@@ -9,19 +9,14 @@ package require TclOO
 
 ::oo::class create RawTcp {
   variable state
-  variable oldLocalInConfig
-  variable oldLocalOutConfig
-  variable oldLocalInReadableEventScript
   variable remoteChannel
   variable serverChannel
-  variable localInChannel
-  variable localOutChannel
   variable ringOnConnect
   variable waitForAta
+  variable modem
 
-  constructor {_localInChannel _localOutChannel _ringOnConnect _waitForAta} {
-    set localInChannel $_localInChannel
-    set localOutChannel $_localOutChannel
+  constructor {modemInst _ringOnConnect _waitForAta} {
+    set modem $modemInst
     set ringOnConnect $_ringOnConnect
     set waitForAta $_waitForAta
 
@@ -61,6 +56,8 @@ package require TclOO
       try {
         set remoteChannel [socket $hostname $port]
       } on error {} {
+        $modem sendToLocal "NO CARRIER\r\n"
+        $modem disconnected
         return
       }
     } elseif {$numArgs != 0} {
@@ -81,21 +78,19 @@ package require TclOO
   method close {} {
     if {$state ne "closed"} {
       close $remoteChannel
-      chan configure $localInChannel {*}$oldLocalInConfig
-      chan configure $localOutChannel {*}$oldLocalOutConfig
-      chan event $localInChannel readable $oldLocalInReadableEventScript
+      $modem disconnected
       set state closed
     }
   }
 
 
-  method maintainConnection {} {
-    set selfNamespace [self namespace]
-    while {$state ne "closed"} {
-      vwait ${selfNamespace}::state
-    }
+  method sendLocalToRemote {localData} {
+    lassign [my ProcessLocalDataBeforeSending $localData] \
+            dataToSend \
+            logMsg
 
-    puts $localOutChannel "NO CARRIER"
+    my SendData $dataToSend
+    logger::log -noheader $logMsg
   }
 
 
@@ -129,53 +124,26 @@ package require TclOO
 
   method ConfigChannels {} {
     set selfNamespace [self namespace]
-    set oldLocalInConfig [chan configure $localInChannel]
-    set oldLocalOutConfig [chan configure $localOutChannel]
-    set oldLocalInReadableEventScript [
-      chan event $localInChannel readable
-    ]
-
     chan configure $remoteChannel -translation binary \
                                   -blocking 0 \
                                   -buffering none
-    chan configure $localInChannel -translation binary \
-                                   -blocking 0 \
-                                   -buffering none
-    chan configure $localOutChannel -translation binary \
-                                    -blocking 0 \
-                                    -buffering none
     chan event $remoteChannel writable [list ${selfNamespace}::my Connected]
     chan event $remoteChannel readable [
       list ${selfNamespace}::my ReceiveFromRemote
     ]
-    chan event $localInChannel readable [
-      list ${selfNamespace}::my SendLocalToRemote
-    ]
   }
 
 
-  method SendLocalToRemote {} {
-    if {[catch {read $localInChannel} dataFromStdin]} {
-      return -code error "Couldn't read from local: $localInChannel"
-    }
-
-    lassign [my ProcessLocalDataBeforeSending $dataFromStdin] \
-            dataToSend \
-            logMsg
-
-    my sendData $dataToSend
-    logger::log -noheader $logMsg
-  }
-
-
-  method sendData {dataOut} {
+  method SendData {dataOut} {
     set bytesOut [split $dataOut {}]
     set numBytes [llength $bytesOut]
     if {$numBytes == 0} {
       return
     }
 
+
     logger::log info "local > remote: length $numBytes"
+    logger::eval -noheader {::logger::dumpBytes $bytesOut}
 
     if {[catch {puts -nonewline $remoteChannel $dataOut}]} {
       my close
@@ -183,7 +151,6 @@ package require TclOO
       return
     }
 
-    logger::eval -noheader {::logger::dumpBytes $bytesOut}
   }
 
 
@@ -192,10 +159,8 @@ package require TclOO
   }
 
 
-
-
   method ReceiveFromRemote {} {
-    puts -nonewline $localOutChannel [my GetFromRemote]
+    $modem sendToLocal [my GetFromRemote]
   }
 
 
@@ -205,8 +170,7 @@ package require TclOO
     if {[dict exists [chan configure $remoteChannel] -peername]} {
       set peername [dict get [chan configure $remoteChannel] -peername]
       logger::log info "Connected to $peername"
-      ::modem::changeMode "on-line"
-      puts $localOutChannel "CONNECT $::modem::speed"
+      $modem connected
       set state open
     }
   }
@@ -214,12 +178,12 @@ package require TclOO
 
   method ServiceIncomingConnection {channel addr port} {
     my stopListening
+    set remoteChannel $channel
 
     if {$ringOnConnect} {
-      puts $localOutChannel "RING"
+      $modem ring
     }
 
-    set remoteChannel $channel
     if {$waitForAta} {
       logger::log info "Recevied connection from: $addr, waiting for ATA"
     } else {

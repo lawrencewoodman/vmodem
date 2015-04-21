@@ -5,20 +5,6 @@ namespace eval testHelpers {
   variable remoteChannel
 }
 
-proc testHelpers::createFakeModem {} {
-  namespace eval ::modem {
-    variable speed 1200
-
-    proc changeMode {newMode} {
-    }
-  }
-}
-
-
-proc testHelpers::destroyFakeModem {} {
-  namespace delete ::modem
-}
-
 
 proc testHelpers::findUnusedPort {} {
   set port 1024

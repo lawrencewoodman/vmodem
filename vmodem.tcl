@@ -116,4 +116,5 @@ dict with params {
   }
 }
 
-modem::emulateModem $config
+set modem [Modem new $config stdin stdout]
+$modem emulate

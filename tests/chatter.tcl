@@ -94,7 +94,7 @@ proc chatter::handleAction {action text stage} {
       incr stage
     }
     expect {
-      set dataIn [string trim [ReadData]]
+      set dataIn [ReadData]
       if {$dataIn ne ""} {
         if {$dataIn ne $text} {
           set msg "stage: $stage expecting: $text, got: $dataIn"
@@ -119,6 +119,10 @@ proc chatter::handleAction {action text stage} {
         incr stage
       }
     }
+    pause {
+      after $text
+      incr stage
+    }
     default {
       return -code error "Unknown action: $action"
     }
@@ -131,14 +135,25 @@ proc chatter::handleAction {action text stage} {
 proc chatter::GetData {channel} {
   variable dataIn
   variable numDataIn
-  set data [read $channel]
-  set numLinesIn 0
+  set line ""
 
-  foreach line [split $data "\n"] {
-    if {$line ne ""} {
-      lappend dataIn $line
-      incr numDataIn
+  set data [read $channel]
+
+  for {set i 0} {$i < [string length $data]} {incr i} {
+    set ch [string index $data $i]
+    append line $ch
+    if {$ch eq "\n"} {
+      if {[string trim $line] ne ""} {
+        lappend dataIn $line
+        incr numDataIn
+      }
+      set line ""
     }
+  }
+
+  if {[string trim $line] ne ""} {
+    lappend dataIn $line
+    incr numDataIn
   }
 }
 
