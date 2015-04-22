@@ -40,8 +40,13 @@ proc testHelpers::listen {{mode echo}} {
 
 proc testHelpers::connect {port} {
   variable remoteChannel
-  set remoteChannel [socket localhost $port]
-  ConfigEchoConnection
+  try {
+    set remoteChannel [socket localhost $port]
+    ConfigEchoConnection
+    return 1
+  } on error {} {
+    return 0
+  }
 }
 
 

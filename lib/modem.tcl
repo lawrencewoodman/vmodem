@@ -38,41 +38,49 @@ source [file join $LibDir telnet.tcl]
     set currentTransport {}
     set escapeBuffer ""
     set lastLocalInputTime 0
-
-    set oldLocalInConfig [chan configure $localInChannel]
-    set oldLocalOutConfig [chan configure $localOutChannel]
-    set oldLocalInReadableEventScript [
-      chan event $localInChannel readable
-    ]
-
-    set selfObject [self object]
-    chan configure $localInChannel \
-                   -translation binary \
-                   -blocking 0 -buffering none
-    chan configure $localOutChannel \
-                   -translation binary \
-                   -blocking 0 -buffering none
-    chan event $localInChannel \
-               readable \
-               [list ${selfObject}::my ReceiveFromLocal]
-    dict with config {
-      set transports [
-        dict create telnet [Telnet new $selfObject \
-                                       $ring_on_connect $wait_for_ata] \
-                    rawtcp [RawTcp new $selfObject \
-                                       $ring_on_connect $wait_for_ata]
-      ]
-    }
-
-    my listen
   }
 
 
-  destructor {
-    my StopListening
-    chan configure $localInChannel {*}$oldLocalInConfig
-    chan configure $localOutChannel {*}$oldLocalOutConfig
-    chan event $localInChannel readable $oldLocalInReadableEventScript
+  method on {} {
+    if {$mode eq "off"} {
+      set oldLocalInConfig [chan configure $localInChannel]
+      set oldLocalOutConfig [chan configure $localOutChannel]
+      set oldLocalInReadableEventScript [
+        chan event $localInChannel readable
+      ]
+
+      set selfObject [self object]
+      chan configure $localInChannel \
+                     -translation binary \
+                     -blocking 0 -buffering none
+      chan configure $localOutChannel \
+                     -translation binary \
+                     -blocking 0 -buffering none
+      chan event $localInChannel \
+                 readable \
+                 [list ${selfObject}::my ReceiveFromLocal]
+      dict with config {
+        set transports [
+          dict create telnet [Telnet new $selfObject \
+                                         $ring_on_connect $wait_for_ata] \
+                      rawtcp [RawTcp new $selfObject \
+                                         $ring_on_connect $wait_for_ata]
+        ]
+      }
+
+      my listen
+    }
+  }
+
+
+  method off {} {
+    if {$mode ne "off"} {
+      my StopListening
+      chan configure $localInChannel {*}$oldLocalInConfig
+      chan configure $localOutChannel {*}$oldLocalOutConfig
+      chan event $localInChannel readable $oldLocalInReadableEventScript
+      set mode "off"
+    }
   }
 
 

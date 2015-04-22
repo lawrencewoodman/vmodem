@@ -77,9 +77,9 @@ package require TclOO
 
   method close {} {
     if {$state ne "closed"} {
+      set state closed
       close $remoteChannel
       $modem disconnected
-      set state closed
     }
   }
 
@@ -198,7 +198,6 @@ package require TclOO
   method ListenWithLogMsg {port logMsg} {
     if {$state ne "open"} {
       logger::log info $logMsg
-
       set selfNamespace [self namespace]
       set serverChannel [
         socket -server [list ${selfNamespace}::my ServiceIncomingConnection] \
