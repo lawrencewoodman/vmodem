@@ -107,7 +107,7 @@ test on-3 {Ensure can resume a connect with ato from command mode} -setup {
 } -result {no errors}
 
 
-test on-4 {Check will accept another inbound connectin once one finished} -setup {
+test on-4 {Check will accept another inbound connection once one finished} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
@@ -144,7 +144,7 @@ test on-4 {Check will accept another inbound connectin once one finished} -setup
 } -result {no errors}
 
 
-test on-5 {Check will only accept one inbound connectin at a time} -setup {
+test on-5 {Check will only accept one inbound connection at a time} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
@@ -168,6 +168,69 @@ test on-5 {Check will only accept one inbound connectin at a time} -setup {
   testHelpers::connect $port
 } -cleanup {
   $modem off
+  testHelpers::closeRemote
+  chatter::close
+} -result {0}
+
+
+test on-6 {Check can use ATD" to make an outbound connection} -setup { ;#"
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+  }
+  set echoPort [testHelpers::listen]
+  set incomingPort [testHelpers::findUnusedPort]
+  dict set config incoming_port $incomingPort
+  lassign [chatter::init] inRead outWrite
+  set modem [Modem new $config $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATD\"localhost:$echoPort\r\n"] \
+    [list expect "ATD\"localhost:$echoPort\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 1200\r\n"} \
+    {send "how do you do\r\n"} \
+    {expect "how do you do\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
+
+
+test on-7 {Check won't accept inbound connection if making an outbound connection} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+  }
+  set echoPort [testHelpers::listen]
+  set incomingPort [testHelpers::findUnusedPort]
+  dict set config incoming_port $incomingPort
+  lassign [chatter::init] inRead outWrite
+  set modem [Modem new $config $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATD\"localhost:$echoPort\r\n"] \
+    [list expect "ATD\"localhost:$echoPort\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 1200\r\n"} \
+    {send "how do you do\r\n"} \
+    {expect "how do you do\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+  testHelpers::connect $incomingPort
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
   testHelpers::closeRemote
   chatter::close
 } -result {0}
