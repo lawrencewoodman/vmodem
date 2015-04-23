@@ -206,9 +206,12 @@ source [file join $LibDir telnet.tcl]
         set msg "Received line:\n[::logger::dumpBytes $bytes]"
       }
       switch -regexp $line {
-        {(?i)^at\s*d[tp"]?.*$} { ;#"
+        {(?i)^at\s*d(t|p).*$} {
           my sendToLocal "OK\r\n"
-          my Dial $line
+          set whoToDial [
+            regsub {(?i)^(at\s*d)(t|p)(.*)$} $line {\3}
+          ]
+          my Dial $whoToDial
           my changeMode "command"
         }
         {(?i)^at\s*a} {
@@ -242,19 +245,21 @@ source [file join $LibDir telnet.tcl]
   }
 
 
-  method Dial {atdLine} {
-    if {[regexp {(?i)^at\s*d".*:\d+$} $atdLine]} { ; #"
-      set hostname [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\2}] ; #"
-      set port [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\3}] ; #"
-      set type "telnet"
-      set logMsg "Emulating dialing by telnetting to $hostname:$port"
-    } elseif {[regexp {(?i)^at\s*d".*$} $atdLine]} { ; #"
-      set hostname [regsub {(?i)^(at\s*d")(.*)$} $atdLine {\2}] ; #"
-      set port 23
+  method Dial {whoToDial} {
+    set whoToDial [string trim $whoToDial]
+
+    if {[regexp {[[:alpha:].]} $whoToDial]} {
+      if {[regexp {^.+:\d+$} $whoToDial]} {
+        set hostname [regsub {^(.+):(\d+)$} $whoToDial {\1}]
+        set port [regsub {^(.+):(\d+)$} $whoToDial {\2}]
+      } else {
+        set hostname $whoToDial
+        set port 23
+      }
       set type "telnet"
       set logMsg "Emulating dialing by telnetting to $hostname:$port"
     } else {
-      set phoneNumber [regsub {(?i)^(at\s*d[tp]?)(.*)$} $atdLine {\2}]
+      set phoneNumber $whoToDial
       set details [$phonebook lookupPhoneNumber $phoneNumber]
 
       if {$details eq {}} {
