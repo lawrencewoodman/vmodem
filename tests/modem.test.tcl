@@ -9,13 +9,15 @@ set LibDir [file normalize [file join $ThisScriptDir .. lib]]
 source [file join $ThisScriptDir "test_helpers.tcl"]
 source [file join $ThisScriptDir "chatter.tcl"]
 source [file join $LibDir "logger.tcl"]
+source [file join $LibDir "phonebook.tcl"]
 source [file join $LibDir "modem.tcl"]
 
 
 test on-1 {Outputs OK message to local when an AT command is given} -setup {
   set config {ring_on_connect 0 wait_for_ata 0 auto_answer 0}
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript {
     {send "ATZ\r\n"}
     {expect "ATZ\r\n"}
@@ -43,7 +45,8 @@ test on-2 {Recognize +++ and escape to command mode} -setup {
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript {
     {expect "RING\r\n"}
     {expect "CONNECT 1200\r\n"}
@@ -76,7 +79,8 @@ test on-3 {Ensure can resume a connect with ato from command mode} -setup {
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript {
     {expect "RING\r\n"}
     {expect "CONNECT 1200\r\n"}
@@ -117,7 +121,8 @@ test on-4 {Check will accept another inbound connection once one finished} -setu
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript {
     {expect "RING\r\n"}
     {expect "CONNECT 1200\r\n"}
@@ -154,7 +159,8 @@ test on-5 {Check will only accept one inbound connection at a time} -setup {
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript {
     {expect "RING\r\n"}
     {expect "CONNECT 1200\r\n"}
@@ -184,7 +190,8 @@ test on-6 {Check can use ATD" to make an outbound connection} -setup { ;#"
   set incomingPort [testHelpers::findUnusedPort]
   dict set config incoming_port $incomingPort
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript [list \
     [list send "ATD\"localhost:$echoPort\r\n"] \
     [list expect "ATD\"localhost:$echoPort\r\n"] \
@@ -215,7 +222,8 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
   set incomingPort [testHelpers::findUnusedPort]
   dict set config incoming_port $incomingPort
   lassign [chatter::init] inRead outWrite
-  set modem [Modem new $config $inRead $outWrite]
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript [list \
     [list send "ATD\"localhost:$echoPort\r\n"] \
     [list expect "ATD\"localhost:$echoPort\r\n"] \
@@ -234,6 +242,41 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
   testHelpers::closeRemote
   chatter::close
 } -result {0}
+
+
+test on-8 {Check can use ATD via a phonebook} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 0
+    incoming_type rawtcp
+  }
+
+  set echoPort [testHelpers::listen]
+  lassign [chatter::init] inRead outWrite
+  set phonebookConfig [
+    dict create 123 [dict create hostname localhost \
+                                 port $echoPort]
+  ]
+  set phonebook [Phonebook new $phonebookConfig]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATD123\r\n"] \
+    [list expect "ATD123\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 1200\r\n"} \
+    {send "how do you do\r\n"} \
+    {expect "how do you do\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
 
 
 cleanupTests

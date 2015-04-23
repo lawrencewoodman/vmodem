@@ -16,6 +16,7 @@ source [file join $LibDir telnet.tcl]
   variable line
   variable speed
   variable config
+  variable phonebook
   variable transports
   variable currentTransport
   variable escapeBuffer
@@ -27,8 +28,9 @@ source [file join $LibDir telnet.tcl]
   variable oldLocalInReadableEventScript
 
 
-  constructor {_config _localInChannel _localOutChannel} {
+  constructor {_config _phonebook _localInChannel _localOutChannel} {
     set config $_config
+    set phonebook $_phonebook
     set localInChannel $_localInChannel
     set localOutChannel $_localOutChannel
     set mode "off"
@@ -240,34 +242,7 @@ source [file join $LibDir telnet.tcl]
   }
 
 
-  method GetPhoneNumberDetails {phoneNumber} {
-    global phonebook
-
-    if {[dict exists $phonebook $phoneNumber]} {
-      set phoneNumberRecord [dict get $phonebook $phoneNumber]
-      dict create \
-        hostname [dict get $phoneNumberRecord hostname] \
-        port [my DictGetWithDefault $phoneNumberRecord port 23] \
-        speed [my DictGetWithDefault $phoneNumberRecord speed 1200] \
-        type [my DictGetWithDefault $phoneNumberRecord type "telnet"]
-    } else {
-      return {}
-    }
-  }
-
-
-  method DictGetWithDefault {dictionary key default} {
-    if {[dict exists $dictionary $key]} {
-      return [dict get $dictionary $key]
-    }
-
-    return $default
-  }
-
-
   method Dial {atdLine} {
-    global phonebook
-
     if {[regexp {(?i)^at\s*d".*:\d+$} $atdLine]} { ; #"
       set hostname [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\2}] ; #"
       set port [regsub {(?i)^(at\s*d")(.*):(\d+)$} $atdLine {\3}] ; #"
@@ -280,7 +255,7 @@ source [file join $LibDir telnet.tcl]
       set logMsg "Emulating dialing by telnetting to $hostname:$port"
     } else {
       set phoneNumber [regsub {(?i)^(at\s*d[tp]?)(.*)$} $atdLine {\2}]
-      set details [my GetPhoneNumberDetails $phoneNumber]
+      set details [$phonebook lookupPhoneNumber $phoneNumber]
 
       if {$details eq {}} {
         logger::log info \

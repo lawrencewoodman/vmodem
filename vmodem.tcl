@@ -19,37 +19,34 @@ namespace import configurator::*
 set ThisScriptDir [file dirname [info script]]
 set LibDir [file join $ThisScriptDir lib]
 source [file join $LibDir logger.tcl]
+source [file join $LibDir phonebook.tcl]
 source [file join $LibDir modem.tcl]
 
 
-proc loadConfiguration {} {
-  global phonebook
-
-  set vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
-  set phonebookFilename [file join [$vmodemAppDirs configHome] "phonebook"]
-  set configFilename [file join [$vmodemAppDirs configHome] "modem.conf"]
-  loadPhonebook $phonebookFilename
-  loadConfigFile $configFilename
+namespace eval vmodem {
+  variable vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
+  variable phonebook
 }
 
 
-proc loadPhonebook {filename} {
-  global phonebook
-
-  if {[catch {open $filename r} fid]} {
-    logger::log warning "Couldn't open file $filename, not using phonebook"
-    puts stderr "Couldn't open file $filename, not using phonebook"
-    set phonebook {}
-  } else {
-    set phonebookContents [read $fid]
-    close $fid
-    set phonebook [parseConfig $phonebookContents]
+proc vmodem::loadPhonebook {{phonebookFilename {}}} {
+  variable vmodemAppDirs
+  variable phonebook
+  if {$phonebookFilename eq {}} {
+    set phonebookFilename [file join [$vmodemAppDirs configHome] "phonebook"]
   }
+
+  set phonebook [Phonebook new]
+  $phonebook loadNumbersFromFile $phonebookFilename
+  return $phonebook
 }
 
 
-proc loadConfigFile {filename} {
-  global config
+proc vmodem::loadConfiguration {} {
+  variable vmodemAppDirs
+  variable config
+  set filename [file join [$vmodemAppDirs configHome] "modem.conf"]
+
   set keys {
     incoming_port {
       incoming_port 1 "The port to accept incoming connections on"
@@ -90,7 +87,7 @@ proc loadConfigFile {filename} {
 }
 
 
-proc handleParameters {parameters} {
+proc vmodem::handleParameters {parameters} {
   set options {
     {log.arg "" {Log information to supplied filename}}
     {pb.arg "" {Phonebook filename}}
@@ -102,20 +99,30 @@ proc handleParameters {parameters} {
   set pb [dict get $params pb]
   if {$pb ne ""} {
     loadPhonebook $pb
+  } else {
+    loadPhonebook
   }
 
   return $params
 }
 
 
-loadConfiguration
-set params [handleParameters $argv]
-dict with params {
-  if {$log ne ""} {
-    logger::init $log
+proc vmodem::main {commandLineArgs} {
+  variable config
+  variable phonebook
+
+  loadConfiguration
+  set params [handleParameters $commandLineArgs]
+  dict with params {
+    if {$log ne ""} {
+      logger::init $log
+    }
   }
+
+  set modem [Modem new $config $phonebook stdin stdout]
+  $modem on
+  $modem emulate
 }
 
-set modem [Modem new $config stdin stdout]
-$modem on
-$modem emulate
+
+vmodem::main $argv
