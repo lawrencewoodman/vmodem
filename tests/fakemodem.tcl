@@ -49,6 +49,11 @@
   }
 
 
+  method failedToConnect {} {
+    puts $localOutChannel "NO CARRIER\r\n"
+  }
+
+
   method isOnline {} {
     return true
   }

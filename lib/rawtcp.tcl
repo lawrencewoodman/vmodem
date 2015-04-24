@@ -56,8 +56,7 @@ package require TclOO
       try {
         set remoteChannel [socket $hostname $port]
       } on error {} {
-        $modem sendToLocal "NO CARRIER\r\n"
-        $modem disconnected
+        $modem failedToConnect
         return
       }
     } elseif {$numArgs != 0} {
@@ -128,9 +127,6 @@ package require TclOO
                                   -blocking 0 \
                                   -buffering none
     chan event $remoteChannel writable [list ${selfNamespace}::my Connected]
-    chan event $remoteChannel readable [
-      list ${selfNamespace}::my ReceiveFromRemote
-    ]
   }
 
 
@@ -167,6 +163,7 @@ package require TclOO
 
 
   method Connected {} {
+    set selfNamespace [self namespace]
     chan event $remoteChannel writable {}
 
     if {[dict exists [chan configure $remoteChannel] -peername]} {
@@ -174,6 +171,9 @@ package require TclOO
       logger::log info "Connected to $peername"
       $modem connected
       set state open
+      chan event $remoteChannel readable [
+        list ${selfNamespace}::my ReceiveFromRemote
+      ]
     }
   }
 

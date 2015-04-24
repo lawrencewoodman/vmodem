@@ -45,6 +45,7 @@ source [file join $LibDir telnet.tcl]
 
   method on {} {
     if {$mode eq "off"} {
+      my changeMode "command"
       set oldLocalInConfig [chan configure $localInChannel]
       set oldLocalOutConfig [chan configure $localOutChannel]
       set oldLocalInReadableEventScript [
@@ -77,11 +78,12 @@ source [file join $LibDir telnet.tcl]
 
   method off {} {
     if {$mode ne "off"} {
+      my CloseAllTransports
       my StopListening
       chan configure $localInChannel {*}$oldLocalInConfig
       chan configure $localOutChannel {*}$oldLocalOutConfig
       chan event $localInChannel readable $oldLocalInReadableEventScript
-      set mode "off"
+      my changeMode "off"
     }
   }
 
@@ -142,6 +144,14 @@ source [file join $LibDir telnet.tcl]
   }
 
 
+  method failedToConnect {} {
+    my sendToLocal "NO CARRIER\r\n"
+    set currentTransport {}
+    my changeMode "command"
+    my listen
+  }
+
+
   method connected {} {
     my changeMode "on-line"
     my sendToLocal "CONNECT $speed\r\n"
@@ -150,9 +160,7 @@ source [file join $LibDir telnet.tcl]
 
 
   method disconnected {} {
-    if {$mode eq "on-line"} {
-      my sendToLocal "NO CARRIER\r\n"
-    }
+    my sendToLocal "NO CARRIER\r\n"
     set currentTransport {}
     my changeMode "command"
     my listen
@@ -195,6 +203,13 @@ source [file join $LibDir telnet.tcl]
   }
 
 
+  method CloseAllTransports {} {
+    dict for {transportType transportInst} $transports {
+      $transportInst close
+    }
+  }
+
+
   method ProcessLine {} {
     set line [string trim $line]
 
@@ -225,7 +240,6 @@ source [file join $LibDir telnet.tcl]
         {(?i)^at\s*h0?} {
           my sendToLocal "OK\r\n"
           if {$currentTransport ne {}} {
-            my sendToLocal "NO CARRIER\r\n"
             $currentTransport close
           }
         }
