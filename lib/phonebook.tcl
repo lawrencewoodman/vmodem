@@ -10,11 +10,13 @@ package require configurator
 namespace import configurator::*
 
 ::oo::class create Phonebook {
-  variable phonebook {}
+  variable phonebook
 
   constructor {{phonebookConfig {}}} {
     if {$phonebookConfig ne {}} {
       set phonebook [parseConfig $phonebookConfig]
+    } else {
+      set phonebook [dict create]
     }
   }
 

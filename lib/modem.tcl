@@ -247,28 +247,10 @@ source [file join $LibDir telnet.tcl]
 
   method Dial {whoToDial} {
     set whoToDial [string trim $whoToDial]
+    set phoneNumber $whoToDial
+    set details [$phonebook lookupPhoneNumber $phoneNumber]
 
-    if {[regexp {[[:alpha:].]} $whoToDial]} {
-      if {[regexp {^.+:\d+$} $whoToDial]} {
-        set hostname [regsub {^(.+):(\d+)$} $whoToDial {\1}]
-        set port [regsub {^(.+):(\d+)$} $whoToDial {\2}]
-      } else {
-        set hostname $whoToDial
-        set port 23
-      }
-      set type "telnet"
-      set logMsg "Emulating dialing by telnetting to $hostname:$port"
-    } else {
-      set phoneNumber $whoToDial
-      set details [$phonebook lookupPhoneNumber $phoneNumber]
-
-      if {$details eq {}} {
-        logger::log info \
-                    "Couldn't find phone number $phoneNumber in phonebook"
-        my sendToLocal "NO CARRIER\r\n"
-        return
-      }
-
+    if {$details ne {}} {
       set hostname [dict get $details hostname]
       set port [dict get $details port]
       set speed [dict get $details speed]
@@ -279,6 +261,21 @@ source [file join $LibDir telnet.tcl]
       } else {
         set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
       }
+    } elseif {[regexp {[[:alpha:].]} $whoToDial]} {
+      if {[regexp {^.+:\d+$} $whoToDial]} {
+        set hostname [regsub {^(.+):(\d+)$} $whoToDial {\1}]
+        set port [regsub {^(.+):(\d+)$} $whoToDial {\2}]
+      } else {
+        set hostname $whoToDial
+        set port 23
+      }
+      set type "telnet"
+      set logMsg "Emulating dialing by telnetting to $hostname:$port"
+    } else {
+      logger::log info \
+                  "Couldn't find phone number $phoneNumber in phonebook"
+      my sendToLocal "NO CARRIER\r\n"
+      return
     }
 
     my StopListening

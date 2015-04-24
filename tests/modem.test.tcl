@@ -279,4 +279,65 @@ test on-8 {Check can use ATD via a phonebook} -setup {
 } -result {no errors}
 
 
+test on-9 {Check when using ATD that name is looked up in phonebook, instead of just direct telnetting to site} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 0
+    incoming_type rawtcp
+  }
+
+  set echoPort [testHelpers::listen]
+  lassign [chatter::init] inRead outWrite
+  set phonebookConfig [
+    dict create localhost [dict create hostname localhost \
+                                       port $echoPort]
+  ]
+  set phonebook [Phonebook new $phonebookConfig]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATDTlocalhost\r\n"] \
+    [list expect "ATDTlocalhost\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 1200\r\n"} \
+    {send "how do you do\r\n"} \
+    {expect "how do you do\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
+
+
+test on-10 {Check when using ATD that if name is not in phonebook and not a valid hostname then reports NO CARRIER} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 0
+    incoming_type rawtcp
+  }
+
+  lassign [chatter::init] inRead outWrite
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATDT0\r\n"] \
+    [list expect "ATDT0\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "NO CARRIER\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  chatter::close
+} -result {no errors}
+
+
 cleanupTests
