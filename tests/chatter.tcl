@@ -53,11 +53,16 @@ proc chatter::chat {chatScript} {
   variable outRead
   variable pulse
   set maxStage [expr {[llength $chatScript] - 1}]
+  set msg ""
+  set oldStage 0
   set stage 0
   set pulse 0
   set finished 0
+  set timeoutSecs 3
+  set timeSinceNewStage [clock seconds]
 
-  while {!$finished} {
+
+  while {$msg eq ""} {
     after 10 [list set ::chatter::pulse 1]
     vwait ::chatter::pulse
     set pulse 0
@@ -66,12 +71,18 @@ proc chatter::chat {chatScript} {
     lassign $chatLine action text
     lassign [handleAction $action $text $stage] stage msg
 
-    if {$stage > $maxStage && $msg eq ""} {
-      set msg "no errors"
+    if {$stage > $oldStage} {
+      set timeSinceNewStage [clock seconds]
+      set oldStage $stage
+    } else {
+      set currentTime [clock seconds]
+      if {$currentTime - $timeSinceNewStage > $timeoutSecs} {
+        set msg "Timeout - $stage: $action $text"
+      }
     }
 
-    if {$msg ne ""} {
-      set finished 1
+    if {$stage > $maxStage && $msg eq ""} {
+      set msg "no errors"
     }
   }
 
