@@ -64,10 +64,13 @@ source [file join $LibDir telnet.tcl]
                  [list ${selfObject}::my ReceiveFromLocal]
       dict with config {
         set transports [
-          dict create telnet [Telnet new $selfObject \
-                                         $ring_on_connect $wait_for_ata] \
-                      rawtcp [RawTcp new $selfObject \
-                                         $ring_on_connect $wait_for_ata]
+          dict create \
+            telnet [Telnet new $ring_on_connect \
+                               $wait_for_ata \
+                               [list ${selfObject}::my hasRemoteEvent]] \
+            rawtcp [RawTcp new $ring_on_connect \
+                               $wait_for_ata \
+                               [list ${selfObject}::my hasRemoteEvent]] \
         ]
       }
 
@@ -137,33 +140,44 @@ source [file join $LibDir telnet.tcl]
   }
 
 
-  method sendToLocal {localOutData} {
-    if {[catch {puts -nonewline $localOutChannel $localOutData}]} {
-      logger::log error "Couldn't write to local"
+  method hasRemoteEvent {} {
+    if {$mode eq "off"} {return}
+
+    while {[set localData [$currentTransport getDataForLocal]] ne {}} {
+      my sendToLocal $localData
+    }
+
+    while {[set message [$currentTransport getMessage]] ne {}} {
+      switch $message {
+        connected {
+          my changeMode "on-line"
+          my sendToLocal "CONNECT $speed\r\n"
+          set lastLocalInputTime [clock milliseconds]
+        }
+        connectionClosed {
+          my sendToLocal "NO CARRIER\r\n"
+          set currentTransport {}
+          my changeMode "command"
+          my listen
+        }
+        connectionFailed {
+          my sendToLocal "NO CARRIER\r\n"
+          set currentTransport {}
+          my changeMode "command"
+          my listen
+        }
+        ringing {
+          my sendToLocal "RING\r\n"
+        }
+      }
     }
   }
 
 
-  method failedToConnect {} {
-    my sendToLocal "NO CARRIER\r\n"
-    set currentTransport {}
-    my changeMode "command"
-    my listen
-  }
-
-
-  method connected {} {
-    my changeMode "on-line"
-    my sendToLocal "CONNECT $speed\r\n"
-    set lastLocalInputTime [clock milliseconds]
-  }
-
-
-  method disconnected {} {
-    my sendToLocal "NO CARRIER\r\n"
-    set currentTransport {}
-    my changeMode "command"
-    my listen
+  method sendToLocal {localOutData} {
+    if {[catch {puts -nonewline $localOutChannel $localOutData}]} {
+      logger::log error "Couldn't write to local"
+    }
   }
 
 

@@ -3,35 +3,38 @@
 namespace eval chatter {
   variable dataIn {}
   variable numDataIn 0
-  variable inChannel
-  variable outChannel
-  variable pulse
+  variable inRead
+  variable inWrite
+  variable outRead
+  variable outWrite
+  variable transport
 }
 
 
-proc chatter::init {} {
-  variable msg
-  variable stage
+proc chatter::init {{_transport {}}} {
   variable dataIn
   variable numDataIn
   variable inRead
   variable inWrite
   variable outRead
   variable outWrite
+  variable transport
 
-  lassign [chan pipe] inRead inWrite
-  lassign [chan pipe] outRead outWrite
-  chan configure $inRead -translation binary -blocking 0 -buffering none
-  chan configure $inWrite -translation binary -blocking 0 -buffering none
-  chan configure $outRead -translation binary -blocking 0 -buffering none
-  chan configure $outWrite -translation binary -blocking 0 -buffering none
-  chan event $outRead readable [list ::chatter::GetData $outRead]
-
-  set msg ""
-  set stage 0
   set dataIn {}
   set numDataIn 0
-  return [list $inRead $outWrite]
+  set transport $_transport
+
+  if {$transport eq {}} {
+    lassign [chan pipe] inRead inWrite
+    lassign [chan pipe] outRead outWrite
+    chan configure $inRead -translation binary -blocking 0 -buffering none
+    chan configure $inWrite -translation binary -blocking 0 -buffering none
+    chan configure $outRead -translation binary -blocking 0 -buffering none
+    chan configure $outWrite -translation binary -blocking 0 -buffering none
+    chan event $outRead readable [list ::chatter::GetData $outRead]
+
+    return [list $inRead $outWrite]
+  }
 }
 
 
@@ -40,18 +43,20 @@ proc chatter::close {} {
   variable inWrite
   variable outRead
   variable outWrite
+  variable transport
 
-  ::close $inRead
-  ::close $inWrite
-  ::close $outRead
-  ::close $outWrite
+  if {$transport ne {}} {
+    ::close $inRead
+    ::close $inWrite
+    ::close $outRead
+    ::close $outWrite
+  }
 }
 
 
 proc chatter::chat {chatScript} {
   variable inWrite
   variable outRead
-  variable pulse
   set maxStage [expr {[llength $chatScript] - 1}]
   set msg ""
   set oldStage 0
@@ -91,17 +96,17 @@ proc chatter::chat {chatScript} {
 
 
 proc chatter::handleAction {action text stage} {
-  variable inWrite
+  variable transport
   set msg ""
 
   switch $action {
     send {
-      puts -nonewline $inWrite $text
+      SendData $text
       incr stage
 
     }
     sendBinary {
-      puts -nonewline $inWrite [binary format c* $text]
+      SendData [binary format c* $text]
       incr stage
     }
     expect {
@@ -132,6 +137,15 @@ proc chatter::handleAction {action text stage} {
     }
     pause {
       after $text
+      incr stage
+    }
+    getMessage {
+      set latestMessage [$transport getMessage]
+      if {$latestMessage ne {}} {
+        if {$latestMessage ne $text} {
+          set msg "stage: $stage expecting transport getMessage: $text, got: $latestMessage"
+        }
+      }
       incr stage
     }
     default {
@@ -169,7 +183,36 @@ proc chatter::GetData {channel} {
 }
 
 
+proc chatter::SendData {dataToSend} {
+  variable inWrite
+  variable transport
+
+  if {$transport ne {}} {
+    $transport sendLocalToRemote $dataToSend
+  } else {
+    puts -nonewline $inWrite $dataToSend
+  }
+}
+
+
 proc chatter::ReadData {{numBytes 0}} {
+  variable transport
+
+  if {$transport ne {}} {
+    ReadDataViaTransport $numBytes
+  } else {
+    ReadDataViaChannel $numBytes
+  }
+}
+
+
+proc chatter::ReadDataViaTransport {{numBytes 0}} {
+  variable transport
+  $transport getDataForLocal $numBytes
+}
+
+
+proc chatter::ReadDataViaChannel {{numBytes 0}} {
   variable dataIn
   variable numDataIn
 

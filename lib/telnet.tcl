@@ -12,10 +12,9 @@ package require TclOO
 ::oo::class create Telnet {
   superclass RawTcp
   variable telnetCommandIn telnetCommandsOut
-  variable modem
 
-  constructor {modemInst _ringOnConnect _waitForAta} {
-    next $modemInst $_ringOnConnect $_waitForAta
+  constructor {_ringOnConnect _waitForAta {_eventNotifyScript {}}} {
+    next $_ringOnConnect $_waitForAta $_eventNotifyScript
     set telnetCommandIn [list]
     set telnetCommandsOut [list]
   }
@@ -42,7 +41,7 @@ package require TclOO
         if {$unsignedByte == $IAC} {
           lappend telnetCommandIn $unsignedByte
         } else {
-          $modem sendToLocal $ch
+          my SendToLocal $ch
         }
       } else {
         lappend telnetCommandIn $unsignedByte
@@ -128,7 +127,7 @@ package require TclOO
         # IAC escapes IAC, so if you want to send or receive 255 then you need to
         # send IAC twice
         set binaryIAC [binary format c $IAC]
-        $modem sendToLocal $binaryIAC
+        my SendToLocal $binaryIAC
         set telnetCommandIn [list]
       } elseif {$byte2 in $commandCodes} {
         if {$telnetCommandInLength == 3} {

@@ -9,20 +9,24 @@ package require TclOO
 
 ::oo::class create RawTcp {
   variable state
+  variable messages
   variable remoteChannel
   variable serverChannel
   variable ringOnConnect
   variable waitForAta
-  variable modem
+  variable localOutBuffer
+  variable eventNotifyScript
 
-  constructor {modemInst _ringOnConnect _waitForAta} {
-    set modem $modemInst
+  constructor {_ringOnConnect _waitForAta {_eventNotifyScript {}}} {
     set ringOnConnect $_ringOnConnect
     set waitForAta $_waitForAta
 
-    set state closed
+    set state "closed"
+    set messages [list]
     set remoteChannel {}
     set serverChannel {}
+    set localOutBuffer [list]
+    set eventNotifyScript $_eventNotifyScript
   }
 
 
@@ -40,9 +44,30 @@ package require TclOO
   }
 
 
+  method getDataForLocal {{numBytes 0}} {
+    if {$numBytes > 0} {
+      set lastIndex [expr {$numBytes - 1}]
+      set ret [lrange $localOutBuffer 0 $lastIndex]
+      set ret [join $ret {}]
+      set localOutBuffer [lrange $localOutBuffer $numBytes end]
+    } else {
+      set ret [join $localOutBuffer {}]
+      set localOutBuffer {}
+    }
+    return $ret
+  }
+
+
+  method getMessage {} {
+    set message [lindex $messages 0]
+    set messages [lrange $messages 1 end]
+    return $message
+  }
+
+
   method completeInbondConnection {} {
     if {[catch {my connect}]} {
-      set state closed
+      my Report "connectionFailed"
     }
   }
 
@@ -50,13 +75,14 @@ package require TclOO
   method connect {args} {
     set usage ": connect hostname port\n  connect"
     set numArgs [llength $args]
+    my Report "connecting"
 
     if {$numArgs == 2} {
       lassign $args hostname port
       try {
         set remoteChannel [socket $hostname $port]
       } on error {} {
-        $modem failedToConnect
+        my Report "connectionFailed"
         return
       }
     } elseif {$numArgs != 0} {
@@ -64,21 +90,16 @@ package require TclOO
       return -code error "Wrong number of arguments"
     }
 
-    set state connecting
     my ConfigChannels
-  }
-
-
-  method isConnected {} {
-    expr {$state eq "open"}
   }
 
 
   method close {} {
     if {$state ne "closed"} {
-      set state closed
+      my Report "connectionClosed"
       close $remoteChannel
-      $modem disconnected
+      set remoteChannel {}
+      set state "closed"
     }
   }
 
@@ -97,6 +118,24 @@ package require TclOO
   ############################
   # Private methods
   ############################
+
+  method Report {message} {
+    set validMessages {
+      connecting
+      connected
+      connectionClosed
+      connectionFailed
+      ringing
+    }
+
+    if {$message ni $validMessages} {
+      return -code error "$message is not a valid message"
+    }
+
+    lappend messages $message
+    after idle $eventNotifyScript
+  }
+
 
   method GetFromRemote {} {
     if {[catch {read $remoteChannel} dataIn] || $dataIn eq ""} {
@@ -137,7 +176,6 @@ package require TclOO
       return
     }
 
-
     logger::log info "local > remote: length $numBytes"
     logger::eval -noheader {::logger::dumpBytes $bytesOut}
 
@@ -146,7 +184,6 @@ package require TclOO
       logger::log notice "Couldn't write to remote host, closing connection"
       return
     }
-
   }
 
 
@@ -155,10 +192,15 @@ package require TclOO
   }
 
 
+  method SendToLocal {dataToSend} {
+    set moreLocalOutData 1
+    lappend localOutBuffer $dataToSend
+    after idle $eventNotifyScript
+  }
+
+
   method ReceiveFromRemote {} {
-    if {[$modem isOnline]} {
-      $modem sendToLocal [my GetFromRemote]
-    }
+    my SendToLocal [my GetFromRemote]
   }
 
 
@@ -169,8 +211,8 @@ package require TclOO
     if {[dict exists [chan configure $remoteChannel] -peername]} {
       set peername [dict get [chan configure $remoteChannel] -peername]
       logger::log info "Connected to $peername"
-      $modem connected
-      set state open
+      my Report "connected"
+      set state "open"
       chan event $remoteChannel readable [
         list ${selfNamespace}::my ReceiveFromRemote
       ]
@@ -183,7 +225,7 @@ package require TclOO
     set remoteChannel $channel
 
     if {$ringOnConnect} {
-      $modem ring
+      my Report "ringing"
     }
 
     if {$waitForAta} {
@@ -199,10 +241,11 @@ package require TclOO
     if {$state ne "open"} {
       logger::log info $logMsg
       set selfNamespace [self namespace]
-      set serverChannel [
-        socket -server [list ${selfNamespace}::my ServiceIncomingConnection] \
-                       $port
-      ]
+      if {[catch {socket -server \
+                         [list ${selfNamespace}::my ServiceIncomingConnection] \
+                         $port} serverChannel]} {
+        logger::log error "Couldn't create server on port: $port"
+      }
     }
   }
 

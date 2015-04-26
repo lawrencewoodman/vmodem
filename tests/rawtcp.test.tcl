@@ -8,54 +8,52 @@ set LibDir [file normalize [file join $ThisScriptDir .. lib]]
 
 source [file join $ThisScriptDir "test_helpers.tcl"]
 source [file join $ThisScriptDir "chatter.tcl"]
-source [file join $ThisScriptDir "fakemodem.tcl"]
 source [file join $LibDir "logger.tcl"]
 source [file join $LibDir "rawtcp.tcl"]
 
 
-test connect-1 {Outputs CONNECT message to local when connected} -setup {
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
+test connect-1 {Reports as connected when connected} -setup {
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new $modem 0 0]
+  set rawTcp [RawTcp new 0 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "CONNECT 1200\r\n"}
+    {getMessage "connecting"}
+    {getMessage "connected"}
   }
 } -body {
   $rawTcp connect localhost $echoPort
   chatter::chat $chatScript
 } -cleanup {
+  $rawTcp stopListening
   $rawTcp close
   testHelpers::stopListening
   testHelpers::closeRemote
-  chatter::close
 } -result {no errors}
 
 
-test connect-2 {Outputs NO CARRIER message to local when failed to connect} -setup {
+test connect-2 {Reports failed to connect when failed to connect} -setup {
   set unusedPort [testHelpers::findUnusedPort]
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
-  set rawTcp [RawTcp new $modem 0 0]
+  set rawTcp [RawTcp new 0 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "NO CARRIER\r\n"}
+    {getMessage "connecting"}
+    {getMessage "connectionFailed"}
   }
 } -body {
   $rawTcp connect localhost $unusedPort
   chatter::chat $chatScript
 } -cleanup {
-  chatter::close
+  $rawTcp stopListening
 } -result {no errors}
 
 
 test connect-3 {Check can send and receive data} -setup {
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new $modem 0 0]
-  $modem setTransport $rawTcp
+  set rawTcp [RawTcp new 0 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "CONNECT 1200\r\n"}
+    {getMessage "connecting"}
+    {getMessage "connected"}
     {send "this was sent from local\r\n"}
     {expect "this was sent from local\r\n"}
     {send "so was this\r\n"}
@@ -67,39 +65,39 @@ test connect-3 {Check can send and receive data} -setup {
   $rawTcp connect localhost $echoPort
   chatter::chat $chatScript
 } -cleanup {
+  $rawTcp stopListening
   $rawTcp close
   testHelpers::stopListening
   testHelpers::closeRemote
-  chatter::close
 } -result {no errors}
 
 
-test connect-4 {Check detects when remote connection has dropped and send a NO CARRIER message} -setup {
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
+test connect-4 {Check detects when remote connection has dropped and reports it} -setup {
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new $modem 0 0]
+  set rawTcp [RawTcp new 0 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "CONNECT 1200\r\n"}
-    {expect "NO CARRIER\r\n"}
+    {getMessage "connecting"}
+    {getMessage "connected"}
+    {getMessage "connectionClosed"}
   }
 } -body {
   $rawTcp connect localhost $echoPort
   after 100 ::testHelpers::closeRemote
   chatter::chat $chatScript
 } -cleanup {
+  $rawTcp stopListening
   $rawTcp close
   testHelpers::stopListening
-  chatter::close
 } -result {no errors}
 
 
-test listen-1 {Outputs CONNECT message to local when connected} -setup {
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
-  set rawTcp [RawTcp new $modem 0 0]
+test listen-1 {Reports as connected when local in bound connection made} -setup {
+  set rawTcp [RawTcp new 0 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "CONNECT 1200\r\n"}
+    {getMessage "connecting"}
+    {getMessage "connected"}
   }
 } -body {
   set foundPort 0
@@ -117,19 +115,19 @@ test listen-1 {Outputs CONNECT message to local when connected} -setup {
   testHelpers::connect $port
   chatter::chat $chatScript
 } -cleanup {
+  $rawTcp stopListening
   $rawTcp close
   testHelpers::closeRemote
-  chatter::close
 } -result {no errors}
 
 
-test listen-2 {Outputs RING message to local when receives connection if requested} -setup {
-  lassign [chatter::init] inRead outWrite
-  set modem [FakeModem new $inRead $outWrite]
-  set rawTcp [RawTcp new $modem 1 0]
+test listen-2 {Reports as ringing when receives connection if requested} -setup {
+  set rawTcp [RawTcp new 1 0]
+  chatter::init $rawTcp
   set chatScript {
-    {expect "RING\r\n"}
-    {expect "CONNECT 1200\r\n"}
+    {getMessage "ringing"}
+    {getMessage "connecting"}
+    {getMessage "connected"}
   }
 } -body {
   set foundPort 0
@@ -147,9 +145,9 @@ test listen-2 {Outputs RING message to local when receives connection if request
   testHelpers::connect $port
   chatter::chat $chatScript
 } -cleanup {
+  $rawTcp stopListening
   $rawTcp close
   testHelpers::closeRemote
-  chatter::close
 } -result {no errors}
 
 
