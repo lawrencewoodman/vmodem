@@ -67,6 +67,9 @@ proc vmodem::loadConfiguration {} {
       1
       "Whether to wait for ATA before completing incoming connection: 1|0"
     }
+    default_speed {
+      default_speed 1 "The default speed for incoming/outgoing connections"
+    }
   }
 
   if {[catch {open $filename r} fid]} {
@@ -75,6 +78,7 @@ proc vmodem::loadConfiguration {} {
     set config {
       incoming_port 6400
       incoming_type telnet
+      default_speed 1200
       auto_answer 0
       ring_on_connect 1
       wait_for_ata 1

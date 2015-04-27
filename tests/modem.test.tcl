@@ -14,7 +14,13 @@ source [file join $LibDir "modem.tcl"]
 
 
 test on-1 {Outputs OK message to local when an AT command is given} -setup {
-  set config {ring_on_connect 0 wait_for_ata 0 auto_answer 0}
+  set config {
+    ring_on_connect 0
+    wait_for_ata 0
+    auto_answer 0
+    incoming_type rawtcp
+    default_speed 1200
+  }
   lassign [chatter::init] inRead outWrite
   set phonebook [Phonebook new]
   set modem [Modem new $config $phonebook $inRead $outWrite]
@@ -41,6 +47,7 @@ test on-2 {Recognize +++ and escape to command mode} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -75,6 +82,7 @@ test on-3 {Ensure can resume a connect with ato from command mode} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -117,6 +125,7 @@ test on-4 {Check will accept another inbound connection once one finished} -setu
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -155,6 +164,7 @@ test on-5 {Check will only accept one inbound connection at a time} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -179,12 +189,13 @@ test on-5 {Check will only accept one inbound connection at a time} -setup {
 } -result {0}
 
 
-test on-6 {Check can use ATD to make an outbound connection} -setup {
+test on-6 {Check can use ATDT to make an outbound connection} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
@@ -217,6 +228,7 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
+    default_speed 1200
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
@@ -244,12 +256,13 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
 } -result {0}
 
 
-test on-8 {Check can use ATD via a phonebook} -setup {
+test on-8 {Check can use ATDT via a phonebook} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
+    default_speed 1200
   }
 
   set echoPort [testHelpers::listen]
@@ -279,12 +292,13 @@ test on-8 {Check can use ATD via a phonebook} -setup {
 } -result {no errors}
 
 
-test on-9 {Check when using ATD that name is looked up in phonebook, instead of just direct telnetting to site} -setup {
+test on-9 {Check when using ATDT that name is looked up in phonebook, instead of just direct telnetting to site} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
+    default_speed 1200
   }
 
   set echoPort [testHelpers::listen]
@@ -314,12 +328,13 @@ test on-9 {Check when using ATD that name is looked up in phonebook, instead of 
 } -result {no errors}
 
 
-test on-10 {Check when using ATD that if name is not in phonebook and not a valid hostname then reports NO CARRIER} -setup {
+test on-10 {Check when using ATDT that if name is not in phonebook and not a valid hostname then reports NO CARRIER} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
+    default_speed 1200
   }
 
   lassign [chatter::init] inRead outWrite
@@ -336,6 +351,65 @@ test on-10 {Check when using ATD that if name is not in phonebook and not a vali
   chatter::chat $chatScript
 } -cleanup {
   $modem off
+  chatter::close
+} -result {no errors}
+
+
+test on-11 {Check will use the default speed from config for an incoming connection if specified} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+    default_speed 9600
+  }
+  set port [testHelpers::findUnusedPort]
+  dict set config incoming_port $port
+  lassign [chatter::init] inRead outWrite
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript {
+    {expect "RING\r\n"}
+    {expect "CONNECT 9600\r\n"}
+  }
+} -body {
+  $modem on
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
+
+
+test on-12 {Check will use the default speed from config for an outgoing connection if specified} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+    default_speed 9600
+  }
+  set echoPort [testHelpers::listen]
+  set incomingPort [testHelpers::findUnusedPort]
+  dict set config incoming_port $incomingPort
+  lassign [chatter::init] inRead outWrite
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATDTlocalhost:$echoPort\r\n"] \
+    [list expect "ATDTlocalhost:$echoPort\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 9600\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
+  testHelpers::closeRemote
   chatter::close
 } -result {no errors}
 

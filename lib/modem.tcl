@@ -35,11 +35,12 @@ source [file join $LibDir telnet.tcl]
     set localOutChannel $_localOutChannel
     set mode "off"
     set line ""
-    set speed 1200
     set transports {}
     set currentTransport {}
     set escapeBuffer ""
     set lastLocalInputTime 0
+
+    my ResetSpeed
   }
 
 
@@ -159,12 +160,14 @@ source [file join $LibDir telnet.tcl]
           set currentTransport {}
           my changeMode "command"
           my listen
+          my ResetSpeed
         }
         connectionFailed {
           my sendToLocal "NO CARRIER\r\n"
           set currentTransport {}
           my changeMode "command"
           my listen
+          my ResetSpeed
         }
         ringing {
           my sendToLocal "RING\r\n"
@@ -210,6 +213,11 @@ source [file join $LibDir telnet.tcl]
   ########################
   # Internal Commands
   ########################
+  method ResetSpeed {} {
+    set speed [dict get $config default_speed]
+  }
+
+
   method StopListening {} {
     dict for {transportType transportInst} $transports {
       $transportInst stopListening
@@ -290,6 +298,7 @@ source [file join $LibDir telnet.tcl]
         set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
       }
     } elseif {[regexp {[[:alpha:].]} $whoToDial]} {
+
       if {[regexp {^.+:\d+$} $whoToDial]} {
         set hostname [regsub {^(.+):(\d+)$} $whoToDial {\1}]
         set port [regsub {^(.+):(\d+)$} $whoToDial {\2}]
@@ -297,6 +306,7 @@ source [file join $LibDir telnet.tcl]
         set hostname $whoToDial
         set port 23
       }
+
       set type "telnet"
       set logMsg "Emulating dialing by telnetting to $hostname:$port"
     } else {
