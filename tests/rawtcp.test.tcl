@@ -100,16 +100,10 @@ test listen-1 {Reports as connected when local in bound connection made} -setup 
     {getMessage "connected"}
   }
 } -body {
-  set foundPort 0
   set port 1024
 
-  while {!$foundPort} {
-    try {
-      $rawTcp listen $port
-      set foundPort 1
-    } on error {} {
-      incr port
-    }
+  while {![$rawTcp listen $port]} {
+    incr port
   }
 
   testHelpers::connect $port
@@ -130,16 +124,10 @@ test listen-2 {Reports as ringing when receives connection if requested} -setup 
     {getMessage "connected"}
   }
 } -body {
-  set foundPort 0
   set port 1024
 
-  while {!$foundPort} {
-    try {
-      $rawTcp listen $port
-      set foundPort 1
-    } on error {} {
-      incr port
-    }
+  while {![$rawTcp listen $port]} {
+    incr port
   }
 
   testHelpers::connect $port

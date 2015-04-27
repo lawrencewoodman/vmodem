@@ -245,8 +245,11 @@ package require TclOO
                          [list ${selfNamespace}::my ServiceIncomingConnection] \
                          $port} serverChannel]} {
         logger::log error "Couldn't create server on port: $port"
+        return 0
       }
     }
+
+    return 1
   }
 
 }
