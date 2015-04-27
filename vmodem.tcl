@@ -52,7 +52,7 @@ proc vmodem::loadConfiguration {} {
       incoming_port 1 "The port to accept incoming connections on"
     }
     incoming_type {
-      incoming_type telnet "The type of incoming connection: telnet|rawtcp"
+      incoming_type 1 "The type of incoming connection: telnet|rawtcp"
     }
     auto_answer {
       auto_answer 1 "Whether to answer incoming connections: 1|0"
