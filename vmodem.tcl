@@ -10,7 +10,7 @@
 # modem.
 #
 package require Tcl 8.5
-
+package require Tclx
 package require cmdline
 package require AppDirs
 package require configurator
@@ -25,6 +25,7 @@ source [file join $LibDir modem.tcl]
 
 namespace eval vmodem {
   variable vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
+  variable modem
   variable config
   variable phonebook
 }
@@ -123,10 +124,20 @@ proc vmodem::handleParameters {parameters} {
 }
 
 
+proc vmodem::finish {} {
+  variable modem
+  $modem off
+  logger::close
+  exit
+}
+
+
 proc vmodem::main {commandLineArgs} {
+  variable modem
   variable config
   variable phonebook
 
+  signal trap * {::vmodem::finish}
   loadConfiguration
   set params [handleParameters $commandLineArgs]
   dict with params {
@@ -137,8 +148,15 @@ proc vmodem::main {commandLineArgs} {
 
   set modem [Modem new $config $phonebook stdin stdout]
   $modem on
-  $modem emulate
 }
 
 
-vmodem::main $argv
+if {[catch {vmodem::main $argv} result options]} {
+  logger::log critical "result: $result, options: $options"
+  # report the error with original details
+  dict unset options -level
+  return -options $options $result
+}
+
+
+vwait forever

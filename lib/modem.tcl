@@ -46,6 +46,7 @@ source [file join $LibDir telnet.tcl]
 
   method on {} {
     if {$mode eq "off"} {
+      logger::log info "Virtual modem turned on"
       my changeMode "command"
       set oldLocalInConfig [chan configure $localInChannel]
       set oldLocalOutConfig [chan configure $localOutChannel]
@@ -88,6 +89,7 @@ source [file join $LibDir telnet.tcl]
       chan configure $localOutChannel {*}$oldLocalOutConfig
       chan event $localInChannel readable $oldLocalInReadableEventScript
       my changeMode "off"
+      logger::log info "Virtual modem turned off"
     }
   }
 
@@ -106,30 +108,6 @@ source [file join $LibDir telnet.tcl]
 
   method ring {} {
     my sendToLocal "RING\r\n"
-  }
-
-
-  method emulate {} {
-    set selfObject [self object]
-
-    set problem [
-      catch {
-        my changeMode "command"
-        while {$mode ne "off"} {
-          vwait ${selfObject}::mode
-        }
-      } result options
-    ]
-
-    if {$problem} {
-      logger::log critical "result: $result\noptions: $options"
-      # report the error with original details
-      dict unset options -level
-      return -options $options $result
-    }
-
-    # TODO: Trap signls so that can close neatly
-    logger::close
   }
 
 

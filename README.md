@@ -9,6 +9,7 @@ Requirements
 *  Tcl 8.5+
 *  [Tcllib](http://core.tcl.tk/tcllib/home)
 *  [TclOO](http://core.tcl.tk/tcloo/wiki?name=TclOO+Package) (Included as part of the core distribution from Tcl 8.6)
+*  [TclX](http://sourceforge.net/projects/tclx/)
 *  [AppDirs](https://github.com/LawrenceWoodman/appdirs_tcl) module
 *  [configurator](https://github.com/LawrenceWoodman/configurator_tcl) module
 
