@@ -66,31 +66,21 @@ package require TclOO
 
 
   method completeInbondConnection {} {
-    if {[catch {my connect}]} {
+    if {[catch { my Report "connecting"
+                 my ConfigChannels }    ]} {
       my Report "connectionFailed"
     }
   }
 
 
-  method connect {args} {
-    set usage ": connect hostname port\n  connect"
-    set numArgs [llength $args]
+  method connect {hostname port} {
     my Report "connecting"
 
-    if {$numArgs == 2} {
-      lassign $args hostname port
-      try {
-        set remoteChannel [socket $hostname $port]
-      } on error {} {
-        my Report "connectionFailed"
-        return
-      }
-    } elseif {$numArgs != 0} {
-      puts stderr $usage
-      return -code error "Wrong number of arguments"
+    if {[catch {set remoteChannel [socket $hostname $port]}]} {
+      my Report "connectionFailed"
+    } else {
+      my ConfigChannels
     }
-
-    my ConfigChannels
   }
 
 
@@ -232,7 +222,7 @@ package require TclOO
       logger::log info "Recevied connection from: $addr, waiting for ATA"
     } else {
       logger::log info "Recevied connection from: $addr"
-      my connect
+      my completeInbondConnection
     }
   }
 
