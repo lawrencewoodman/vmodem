@@ -25,18 +25,20 @@ source [file join $LibDir modem.tcl]
 
 namespace eval vmodem {
   variable vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
+  variable config
   variable phonebook
 }
 
 
 proc vmodem::loadPhonebook {{phonebookFilename {}}} {
   variable vmodemAppDirs
+  variable config
   variable phonebook
   if {$phonebookFilename eq {}} {
     set phonebookFilename [file join [$vmodemAppDirs configHome] "phonebook"]
   }
 
-  set phonebook [Phonebook new]
+  set phonebook [Phonebook new [dict get $config outbound_defaults]]
   $phonebook loadNumbersFromFile $phonebookFilename
   return $phonebook
 }
@@ -67,8 +69,13 @@ proc vmodem::loadConfiguration {} {
       1
       "Whether to wait for ATA before completing incoming connection: 1|0"
     }
-    default_speed {
-      default_speed 1 "The default speed for incoming/outgoing connections"
+    incoming_speed {
+      incoming_speed 1 "The default speed for incoming connections"
+    }
+    outbound_defaults {
+      outbound_defaults
+      1
+      "The default settings for making an outbound connection"
     }
   }
 
@@ -78,10 +85,15 @@ proc vmodem::loadConfiguration {} {
     set config {
       incoming_port 6400
       incoming_type telnet
-      default_speed 1200
+      incoming_speed 1200
       auto_answer 0
       ring_on_connect 1
       wait_for_ata 1
+      outbound_defaults {
+        port 23
+        speed 1200
+        type telnet
+      }
     }
   } else {
     set configContents [read $fid]

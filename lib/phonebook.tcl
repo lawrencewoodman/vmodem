@@ -10,9 +10,12 @@ package require configurator
 namespace import configurator::*
 
 ::oo::class create Phonebook {
+  variable defaults
   variable phonebook
 
-  constructor {{phonebookConfig {}}} {
+  constructor {{_defaults {}} {phonebookConfig {}}} {
+    set defaults $_defaults
+
     if {$phonebookConfig ne {}} {
       set phonebook [parseConfig $phonebookConfig]
     } else {
@@ -34,11 +37,6 @@ namespace import configurator::*
 
 
   method lookupPhoneNumber {phoneNumber} {
-    set defaults {
-      port 23
-      speed 1200
-      type telnet
-    }
     if {[dict exists $phonebook $phoneNumber]} {
       set phoneNumberRecord [dict get $phonebook $phoneNumber]
       dict create \

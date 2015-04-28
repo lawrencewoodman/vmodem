@@ -214,7 +214,7 @@ source [file join $LibDir telnet.tcl]
   # Internal Commands
   ########################
   method ResetSpeed {} {
-    set speed [dict get $config default_speed]
+    set speed [dict get $config incoming_speed]
   }
 
 
@@ -291,12 +291,7 @@ source [file join $LibDir telnet.tcl]
       set port [dict get $details port]
       set speed [dict get $details speed]
       set type [dict get $details type]
-
-      if {$type eq "telnet"} {
-        set logMsg "Emulating dialing $phoneNumber by telnetting to $hostname:$port"
-      } else {
-        set logMsg "Emulating dialing $phoneNumber by making raw tcp connection to $hostname:$port"
-      }
+      set logMsg "Emulating dialing $phoneNumber "
     } elseif {[regexp {[[:alpha:].]} $whoToDial]} {
 
       if {[regexp {^.+:\d+$} $whoToDial]} {
@@ -304,16 +299,23 @@ source [file join $LibDir telnet.tcl]
         set port [regsub {^(.+):(\d+)$} $whoToDial {\2}]
       } else {
         set hostname $whoToDial
-        set port 23
+        set port [dict get $config outbound_defaults port]
       }
 
-      set type "telnet"
-      set logMsg "Emulating dialing by telnetting to $hostname:$port"
+      set type [dict get $config outbound_defaults type]
+      set speed [dict get $config outbound_defaults speed]
+      set logMsg "Emulating dialing "
     } else {
       logger::log info \
                   "Couldn't find phone number $phoneNumber in phonebook"
       my sendToLocal "NO CARRIER\r\n"
       return
+    }
+
+    if {$type eq "telnet"} {
+      append logMsg "by telnetting to $hostname:$port"
+    } else {
+      append logMsg "by making raw tcp connection to $hostname:$port"
     }
 
     my StopListening

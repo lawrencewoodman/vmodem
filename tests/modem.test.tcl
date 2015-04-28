@@ -19,7 +19,7 @@ test on-1 {Outputs OK message to local when an AT command is given} -setup {
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   lassign [chatter::init] inRead outWrite
   set phonebook [Phonebook new]
@@ -47,7 +47,7 @@ test on-2 {Recognize +++ and escape to command mode for inbound connection} -set
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -82,7 +82,7 @@ test on-3 {Ensure can resume a connect with ato from command mode} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -125,7 +125,7 @@ test on-4 {Check will accept another inbound connection once one finished} -setu
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -164,7 +164,7 @@ test on-5 {Check will only accept one inbound connection at a time} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -195,7 +195,12 @@ test on-6 {Check can use ATDT to make an outbound connection} -setup {
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 1200
+      type telnet
+    }
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
@@ -228,7 +233,12 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 1200
+      type telnet
+    }
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
@@ -262,7 +272,12 @@ test on-8 {Check can use ATDT via a phonebook} -setup {
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 1200
+      type telnet
+    }
   }
 
   set echoPort [testHelpers::listen]
@@ -271,7 +286,9 @@ test on-8 {Check can use ATDT via a phonebook} -setup {
     dict create 123 [dict create hostname localhost \
                                  port $echoPort]
   ]
-  set phonebook [Phonebook new $phonebookConfig]
+  set phonebook [
+    Phonebook new [dict get $config outbound_defaults] $phonebookConfig
+  ]
   set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript [list \
     [list send "ATDT123\r\n"] \
@@ -298,7 +315,12 @@ test on-9 {Check when using ATDT that name is looked up in phonebook, instead of
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 1200
+      type telnet
+    }
   }
 
   set echoPort [testHelpers::listen]
@@ -307,7 +329,9 @@ test on-9 {Check when using ATDT that name is looked up in phonebook, instead of
     dict create localhost [dict create hostname localhost \
                                        port $echoPort]
   ]
-  set phonebook [Phonebook new $phonebookConfig]
+  set phonebook [
+    Phonebook new [dict get $config outbound_defaults] $phonebookConfig
+  ]
   set modem [Modem new $config $phonebook $inRead $outWrite]
   set chatScript [list \
     [list send "ATDTlocalhost\r\n"] \
@@ -334,7 +358,7 @@ test on-10 {Check when using ATDT that if name is not in phonebook and not a val
     wait_for_ata 0
     auto_answer 0
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
 
   lassign [chatter::init] inRead outWrite
@@ -355,13 +379,13 @@ test on-10 {Check when using ATDT that if name is not in phonebook and not a val
 } -result {no errors}
 
 
-test on-11 {Check will use the default speed from config for an incoming connection if specified} -setup {
+test on-11 {Check will use incoming_speed from config for an incoming connection if specified} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 9600
+    incoming_speed 9600
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -383,13 +407,18 @@ test on-11 {Check will use the default speed from config for an incoming connect
 } -result {no errors}
 
 
-test on-12 {Check will use the default speed from config for an outgoing connection if specified} -setup {
+test on-12 {Check will use the default outbound speed from config for an outgoing connection if specified} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 9600
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 9600
+      type telnet
+    }
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
@@ -420,7 +449,7 @@ test on-13 {Recognize +++ath0 and escape to command mode when sequence joined fo
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
   }
   set port [testHelpers::findUnusedPort]
   dict set config incoming_port $port
@@ -453,7 +482,12 @@ test on-14 {Check will recognize +++ and escape to command mode for an outbound 
     wait_for_ata 0
     auto_answer 1
     incoming_type rawtcp
-    default_speed 1200
+    incoming_speed 1200
+    outbound_defaults {
+      port 23
+      speed 1200
+      type telnet
+    }
   }
   set echoPort [testHelpers::listen]
   set incomingPort [testHelpers::findUnusedPort]
