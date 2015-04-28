@@ -41,7 +41,7 @@ test on-1 {Outputs OK message to local when an AT command is given} -setup {
 } -result {no errors}
 
 
-test on-2 {Recognize +++ and escape to command mode} -setup {
+test on-2 {Recognize +++ and escape to command mode for inbound connection} -setup {
   set config {
     ring_on_connect 1
     wait_for_ata 0
@@ -402,6 +402,77 @@ test on-12 {Check will use the default speed from config for an outgoing connect
     [list expect "ATDTlocalhost:$echoPort\r\n"] \
     {expect "OK\r\n"} \
     {expect "CONNECT 9600\r\n"} \
+  ]
+} -body {
+  $modem on
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::stopListening
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
+
+
+test on-13 {Recognize +++ath0 and escape to command mode when sequence joined for inbound connection} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+    default_speed 1200
+  }
+  set port [testHelpers::findUnusedPort]
+  dict set config incoming_port $port
+  lassign [chatter::init] inRead outWrite
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript {
+    {expect "RING\r\n"}
+    {expect "CONNECT 1200\r\n"}
+    {pause 1000}
+    {send "+++ath0\r\n"}
+    {expect "+++ath0\r\n"}
+    {expect "OK\r\n"}
+    {expect "NO CARRIER\r\n"}
+  }
+} -body {
+  $modem on
+  testHelpers::connect $port
+  chatter::chat $chatScript
+} -cleanup {
+  $modem off
+  testHelpers::closeRemote
+  chatter::close
+} -result {no errors}
+
+
+test on-14 {Check will recognize +++ and escape to command mode for an outbound connection} -setup {
+  set config {
+    ring_on_connect 1
+    wait_for_ata 0
+    auto_answer 1
+    incoming_type rawtcp
+    default_speed 1200
+  }
+  set echoPort [testHelpers::listen]
+  set incomingPort [testHelpers::findUnusedPort]
+  dict set config incoming_port $incomingPort
+  lassign [chatter::init] inRead outWrite
+  set phonebook [Phonebook new]
+  set modem [Modem new $config $phonebook $inRead $outWrite]
+  set chatScript [list \
+    [list send "ATDTlocalhost:$echoPort\r\n"] \
+    [list expect "ATDTlocalhost:$echoPort\r\n"] \
+    {expect "OK\r\n"} \
+    {expect "CONNECT 1200\r\n"} \
+    {send "how do you do\r\n"} \
+    {expect "how do you do\r\n"} \
+    {pause 1000} \
+    {send "+++ath0\r\n"} \
+    {expect "+++ath0\r\n"} \
+    {expect "OK\r\n"} \
+    {expect "NO CARRIER\r\n"}
   ]
 } -body {
   $modem on
