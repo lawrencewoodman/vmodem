@@ -9,7 +9,7 @@
 # machines across the internet as if they were dialling a phone number on a
 # modem.
 #
-package require Tcl 8.5
+package require Tcl 8.6
 package require Tclx
 package require cmdline
 package require AppDirs
@@ -150,8 +150,9 @@ proc vmodem::main {commandLineArgs} {
   $modem on
 }
 
-
-if {[catch {vmodem::main $argv} result options]} {
+try {
+  vmodem::main $argv
+} on error {result options} {
   logger::log critical "result: $result, options: $options"
   # report the error with original details
   dict unset options -level

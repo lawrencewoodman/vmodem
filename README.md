@@ -6,9 +6,8 @@ Emulate a modem so that applications such as vice can use it to connect to machi
 
 Requirements
 ------------
-*  Tcl 8.5+
+*  Tcl 8.6
 *  [Tcllib](http://core.tcl.tk/tcllib/home)
-*  [TclOO](http://core.tcl.tk/tcloo/wiki?name=TclOO+Package) (Included as part of the core distribution from Tcl 8.6)
 *  [TclX](http://sourceforge.net/projects/tclx/)
 *  [AppDirs](https://github.com/LawrenceWoodman/appdirs_tcl) module
 *  [configurator](https://github.com/LawrenceWoodman/configurator_tcl) module
@@ -19,7 +18,7 @@ Communicate with the program via stdin/stdout.  So in vice you can specify it as
 
 Contributions
 -------------
-If you want to improve this module make a pull request to the [repo](https://github.com/LawrenceWoodman/vmodem) on github.  Please put any pull requests in a separate branch to ease integration and add a test to prove that it works.
+If you want to improve this program make a pull request to the [repo](https://github.com/LawrenceWoodman/vmodem) on github.  Please put any pull requests in a separate branch to ease integration and add a test to prove that it works.
 
 Licence
 -------
