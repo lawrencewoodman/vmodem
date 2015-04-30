@@ -158,6 +158,7 @@ source [file join $LibDir telnet.tcl]
   method sendToLocal {localOutData} {
     if {[catch {puts -nonewline $localOutChannel $localOutData}]} {
       logger::log error "Couldn't write to local"
+      return
     }
   }
 

@@ -68,6 +68,23 @@ proc testHelpers::closeRemote {} {
 }
 
 
+proc testHelpers::readLogToList {filename} {
+  set fd [open $filename r]
+  set logContents [read $fd]
+  close $fd
+
+  lmap entry [split $logContents "\n"] {
+    set withoutDate [
+      regsub {^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\s+)(.*)$} $entry {\2}
+    ]
+    set level [regsub {^([^ ]+)\s+(.*)$} $withoutDate {\1}]
+    set msg [regsub {^([^ ]+)\s+(.*)$} $withoutDate {\2}]
+    if {$msg eq ""} {continue}
+    list $level $msg
+  }
+}
+
+
 
 #############################
 # Internal Commands

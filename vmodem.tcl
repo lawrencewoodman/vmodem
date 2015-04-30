@@ -12,6 +12,13 @@
 package require Tcl 8.6
 package require Tclx
 package require cmdline
+
+try {
+  package require pty
+} on error {} {
+  puts stderr "pty package couldn't be found, disabling pseudo TTY support"
+}
+
 package require AppDirs
 package require configurator
 namespace import configurator::*
@@ -110,6 +117,10 @@ proc vmodem::handleParameters {parameters} {
     {pb.arg "" {Phonebook filename}}
   }
 
+  if {[info commands "::pty::open"] ne {}} {
+    lappend options {p 1 {Use a pseudo TTY}}
+  }
+
   set usage ": vmodem.tcl \[options]\noptions:"
   set params [::cmdline::getoptions parameters $options $usage]
 
@@ -146,7 +157,14 @@ proc vmodem::main {commandLineArgs} {
     }
   }
 
-  set modem [Modem new $config $phonebook stdin stdout]
+  if {[dict exists $params p] && [dict get $params p]} {
+    lassign [pty::open] masterIO slavePTYName
+    puts "Using pseudo TTY device: $slavePTYName"
+    logger::log info "Using pseudo TTY device: $slavePTYName"
+    set modem [Modem new $config $phonebook $masterIO $masterIO]
+  } else {
+    set modem [Modem new $config $phonebook stdin stdout]
+  }
   $modem on
 }
 

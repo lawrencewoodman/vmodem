@@ -9,16 +9,24 @@ namespace eval logger {
   package require cmdline
   variable logFID
   variable active 0
+  variable lastLevel
+  variable lastMsg
 }
 
 
 proc logger::init {filename} {
   variable logFID
   variable active
+  variable lastLevel
+  variable lastMsg
+
   if {[catch {open $filename a} logFID]} {
     error "Couldn't open $filename for logging"
   }
+
   set active 1
+  set lastLevel ""
+  set lastMsg ""
 }
 
 
@@ -34,6 +42,8 @@ proc logger::close {} {
 proc logger::log {args} {
   variable logFID
   variable active
+  variable lastLevel
+  variable lastMsg
 
   if {!$active} {return}
 
@@ -56,6 +66,13 @@ proc logger::log {args} {
       puts stderr "Error: Wrong number of arguments"
       ::cmdline::usage $options $usage
     }
+  }
+
+  if {$level in {error critical} && $lastLevel eq $level && $lastMsg eq $msg} {
+    return
+  } else {
+    set lastLevel $level
+    set lastMsg $msg
   }
 
   if {[dict get $params noheader]} {

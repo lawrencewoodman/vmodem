@@ -9,12 +9,13 @@ Requirements
 *  Tcl 8.6
 *  [Tcllib](http://core.tcl.tk/tcllib/home)
 *  [TclX](http://sourceforge.net/projects/tclx/)
+*  [pty](https://github.com/LawrenceWoodman/pty_tcl) optional package if you want to use a pseudo TTY
 *  [AppDirs](https://github.com/LawrenceWoodman/appdirs_tcl) module
 *  [configurator](https://github.com/LawrenceWoodman/configurator_tcl) module
 
 Usage
 -----
-Communicate with the program via stdin/stdout.  So in vice you can specify it as the program to exec in the RS232 settings.
+Communicate with the program via stdin/stdout by default or a pseudo TTY if requested.  So in vice you can specify it as the program to exec in the RS232 settings.
 
 Contributions
 -------------
