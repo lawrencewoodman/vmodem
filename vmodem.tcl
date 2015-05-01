@@ -33,14 +33,12 @@ source [file join $LibDir modem.tcl]
 namespace eval vmodem {
   variable vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
   variable modem
-  variable config
   variable phonebook
 }
 
 
-proc vmodem::loadPhonebook {{phonebookFilename {}}} {
+proc vmodem::loadPhonebook {config {phonebookFilename {}}} {
   variable vmodemAppDirs
-  variable config
   variable phonebook
   if {$phonebookFilename eq {}} {
     set phonebookFilename [file join [$vmodemAppDirs configHome] "phonebook"]
@@ -54,7 +52,6 @@ proc vmodem::loadPhonebook {{phonebookFilename {}}} {
 
 proc vmodem::loadConfiguration {} {
   variable vmodemAppDirs
-  variable config
   set filename [file join [$vmodemAppDirs configHome] "modem.conf"]
 
   set keys {
@@ -85,6 +82,9 @@ proc vmodem::loadConfiguration {} {
       1
       "The default settings for making an outbound connection"
     }
+    serial_device {
+     serial_device 1 "A serial device for local input/output"
+    }
   }
 
   if {[catch {open $filename r} fid]} {
@@ -108,27 +108,46 @@ proc vmodem::loadConfiguration {} {
     close $fid
     set config [parseConfig $configContents]
   }
+
+  return $config
 }
 
 
-proc vmodem::handleParameters {parameters} {
+proc vmodem::handleParameters {config parameters} {
   set options {
     {log.arg "" {Log information to supplied filename}}
     {pb.arg "" {Phonebook filename}}
   }
 
   if {[info commands "::pty::open"] ne {}} {
-    lappend options {p 1 {Use a pseudo TTY}}
+    lappend options {p {Use a pseudo TTY for local input/output}}
+  }
+
+  if {[dict exists $config serial_device]} {
+    lappend options {
+      s {Use a serial device for local input/output (experimental)}
+    }
   }
 
   set usage ": vmodem.tcl \[options]\noptions:"
-  set params [::cmdline::getoptions parameters $options $usage]
+  try {
+    set params [::cmdline::getoptions parameters $options $usage]
+  } on error {result options} {
+    puts stderr $result
+    exit 1
+  }
 
-  set pb [dict get $params pb]
-  if {$pb ne ""} {
-    loadPhonebook $pb
-  } else {
-    loadPhonebook
+  dict with params {
+    if {[dict exists $params p] && $p && [dict exists $params s] && $s} {
+      puts stderr "Error: -p and -s options are mutually exclusive"
+      puts stderr [::cmdline::usage $options $usage]
+      exit 1
+    }
+    if {$pb ne ""} {
+      loadPhonebook $config $pb
+    } else {
+      loadPhonebook $config
+    }
   }
 
   return $params
@@ -145,23 +164,32 @@ proc vmodem::finish {} {
 
 proc vmodem::main {commandLineArgs} {
   variable modem
-  variable config
   variable phonebook
 
   signal trap * {::vmodem::finish}
-  loadConfiguration
-  set params [handleParameters $commandLineArgs]
+  set config [loadConfiguration]
+  set params [handleParameters $config $commandLineArgs]
   dict with params {
     if {$log ne ""} {
       logger::init $log
     }
   }
 
-  if {[dict exists $params p] && [dict get $params p]} {
+  if {[dict exists $params p] && $p} {
     lassign [pty::open] masterIO slavePTYName
     puts "Using pseudo TTY device: $slavePTYName"
     logger::log info "Using pseudo TTY device: $slavePTYName"
     set modem [Modem new $config $phonebook $masterIO $masterIO]
+  } elseif {[dict exists $params s] && $s} {
+    set serial_device [dict get $config serial_device]
+    dict with serial_device {
+      set serialIO [open $name r+]
+      fconfigure $serialIO -mode $baud,$parity,$data_bits,$stop_bits \
+                           -handshake $handshake
+      puts "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+      logger::log info "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+      set modem [Modem new $config $phonebook $serialIO $serialIO]
+    }
   } else {
     set modem [Modem new $config $phonebook stdin stdout]
   }
