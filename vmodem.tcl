@@ -26,6 +26,7 @@ namespace import configurator::*
 set ThisScriptDir [file dirname [info script]]
 set LibDir [file join $ThisScriptDir lib]
 source [file join $LibDir logger.tcl]
+source [file join $LibDir config.tcl]
 source [file join $LibDir phonebook.tcl]
 source [file join $LibDir modem.tcl]
 
@@ -47,69 +48,6 @@ proc vmodem::loadPhonebook {config {phonebookFilename {}}} {
   set phonebook [Phonebook new [dict get $config outbound_defaults]]
   $phonebook loadNumbersFromFile $phonebookFilename
   return $phonebook
-}
-
-
-proc vmodem::loadConfiguration {} {
-  variable vmodemAppDirs
-  set filename [file join [$vmodemAppDirs configHome] "modem.conf"]
-
-  set keys {
-    incoming_port {
-      incoming_port 1 "The port to accept incoming connections on"
-    }
-    incoming_type {
-      incoming_type 1 "The type of incoming connection: telnet|rawtcp"
-    }
-    auto_answer {
-      auto_answer 1 "Whether to answer incoming connections: 1|0"
-    }
-    ring_on_connect {
-      ring_on_connect
-      1
-      "Whether to give RING message on incoming connection: 1|0"
-    }
-    wait_for_ata {
-      wait_for_ata
-      1
-      "Whether to wait for ATA before completing incoming connection: 1|0"
-    }
-    incoming_speed {
-      incoming_speed 1 "The default speed for incoming connections"
-    }
-    outbound_defaults {
-      outbound_defaults
-      1
-      "The default settings for making an outbound connection"
-    }
-    serial_device {
-     serial_device 1 "A serial device for local input/output"
-    }
-  }
-
-  if {[catch {open $filename r} fid]} {
-    logger::log warning "Couldn't open file $filename, using defaults"
-    puts stderr "Couldn't open file $filename, using defaults"
-    set config {
-      incoming_port 6400
-      incoming_type telnet
-      incoming_speed 1200
-      auto_answer 0
-      ring_on_connect 1
-      wait_for_ata 1
-      outbound_defaults {
-        port 23
-        speed 1200
-        type telnet
-      }
-    }
-  } else {
-    set configContents [read $fid]
-    close $fid
-    set config [parseConfig $configContents]
-  }
-
-  return $config
 }
 
 
@@ -167,7 +105,7 @@ proc vmodem::main {commandLineArgs} {
   variable phonebook
 
   signal trap * {::vmodem::finish}
-  set config [loadConfiguration]
+  set config [config::load]
   set params [handleParameters $config $commandLineArgs]
   dict with params {
     if {$log ne ""} {
