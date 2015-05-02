@@ -59,9 +59,7 @@ proc config::load {} {
   }
 
   if {[catch {open $filename r} fid]} {
-    logger::log warning "Couldn't open file $filename, using defaults"
-    puts stderr "Couldn't open file $filename, using defaults"
-    set config [DefaultConfig]
+    return -code error "Couldn't open config file: $filename"
   } else {
     set configContents [read $fid]
     close $fid
@@ -84,25 +82,6 @@ proc config::load {} {
 ##########################
 # Internal commands
 ##########################
-proc config::DefaultConfig {} {
-  set config {
-    incoming_port 6400
-    incoming_type telnet
-    incoming_speed 1200
-    auto_answer 0
-    ring_on_connect 1
-    wait_for_ata 1
-    outbound_defaults {
-      port 23
-      speed 1200
-      type telnet
-    }
-    local_io stdio
-  }
-
-  return $config
-}
-
 
 proc config::IsConfigValid {config} {
   set numberFields {incoming_port incoming_speed}
