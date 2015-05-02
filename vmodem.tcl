@@ -53,10 +53,11 @@ proc vmodem::loadPhonebook {config {phonebookFilename {}}} {
 }
 
 
-proc vmodem::handleParameters {config parameters} {
+proc vmodem::handleParameters {parameters} {
   set options {
     {log.arg "" {Log information to supplied filename}}
     {pb.arg "" {Phonebook filename}}
+    {c.arg "" {Config filename}}
   }
 
   set usage ": vmodem.tcl \[options]\noptions:"
@@ -65,14 +66,6 @@ proc vmodem::handleParameters {config parameters} {
   } on error {result options} {
     puts stderr $result
     exit 1
-  }
-
-  dict with params {
-    if {$pb ne ""} {
-      loadPhonebook $config $pb
-    } else {
-      loadPhonebook $config
-    }
   }
 
   return $params
@@ -144,11 +137,23 @@ proc vmodem::main {commandLineArgs} {
   variable localOut
 
   signal trap * {::vmodem::finish}
-  set config [config::load]
-  set params [handleParameters $config $commandLineArgs]
+
+  set params [handleParameters $commandLineArgs]
   dict with params {
     if {$log ne ""} {
       logger::init $log
+    }
+
+    if {$c eq ""} {
+      set config [config::load]
+    } else {
+      set config [config::load $c]
+    }
+
+    if {$pb ne ""} {
+      loadPhonebook $config $pb
+    } else {
+      loadPhonebook $config
     }
   }
 

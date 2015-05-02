@@ -18,9 +18,11 @@ namespace eval config {
 }
 
 
-proc config::load {} {
+proc config::load {{filename {}}} {
   variable vmodemAppDirs
-  set filename [file join [$vmodemAppDirs configHome] "vmodem.conf"]
+  if {$filename eq {}} {
+    set filename [file join [$vmodemAppDirs configHome] "vmodem.conf"]
+  }
 
   set keys {
     incoming_port {
