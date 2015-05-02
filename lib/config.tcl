@@ -20,7 +20,7 @@ namespace eval config {
 
 proc config::load {} {
   variable vmodemAppDirs
-  set filename [file join [$vmodemAppDirs configHome] "modem.conf"]
+  set filename [file join [$vmodemAppDirs configHome] "vmodem.conf"]
 
   set keys {
     incoming_port {
