@@ -35,6 +35,8 @@ namespace eval vmodem {
   variable vmodemAppDirs [AppDirs new "LorryWoodman" "vmodem"]
   variable modem
   variable phonebook
+  variable localIn
+  variable localOut
 }
 
 
@@ -57,16 +59,6 @@ proc vmodem::handleParameters {config parameters} {
     {pb.arg "" {Phonebook filename}}
   }
 
-  if {[info commands "::pty::open"] ne {}} {
-    lappend options {p {Use a pseudo TTY for local input/output}}
-  }
-
-  if {[dict exists $config serial_device]} {
-    lappend options {
-      s {Use a serial device for local input/output (experimental)}
-    }
-  }
-
   set usage ": vmodem.tcl \[options]\noptions:"
   try {
     set params [::cmdline::getoptions parameters $options $usage]
@@ -76,11 +68,6 @@ proc vmodem::handleParameters {config parameters} {
   }
 
   dict with params {
-    if {[dict exists $params p] && $p && [dict exists $params s] && $s} {
-      puts stderr "Error: -p and -s options are mutually exclusive"
-      puts stderr [::cmdline::usage $options $usage]
-      exit 1
-    }
     if {$pb ne ""} {
       loadPhonebook $config $pb
     } else {
@@ -94,15 +81,67 @@ proc vmodem::handleParameters {config parameters} {
 
 proc vmodem::finish {} {
   variable modem
-  $modem off
-  logger::close
+  variable localIn
+  variable localOut
+
+  catch {
+    $modem off
+    logger::close
+    close $localIn
+    close $localOut
+  }
+
   exit
+}
+
+
+proc vmodem::getLocalIO {config} {
+  set local_io [dict get $config local_io]
+
+  switch $local_io {
+    stdio {
+      return {stdin stdout}
+    }
+
+    pseudo {
+      if {[info commands "::pty::open"] eq {}} {
+        return -code error \
+               "pty package not loaded, so local_io can't be pseudo in config"
+      }
+      lassign [pty::open] masterIO slavePTYName
+      puts "Using pseudo TTY device: $slavePTYName"
+      logger::log info "Using pseudo TTY device: $slavePTYName"
+      return [list $masterIO $masterIO]
+    }
+
+    serial {
+      if {![dict exists $config serial_device]} {
+        return -code error \
+               "serial_device not defined in config, so local_io can't be serial"
+      }
+      set serial_device [dict get $config serial_device]
+      dict with serial_device {
+        set serialIO [open $name r+]
+        fconfigure $serialIO -mode $baud,$parity,$data_bits,$stop_bits \
+                             -handshake $handshake
+        puts "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+        logger::log info "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+        return [list $serialIO $serialIO]
+      }
+    }
+
+    default {
+      return -code error "invalid local_io setting: $local_io"
+    }
+  }
 }
 
 
 proc vmodem::main {commandLineArgs} {
   variable modem
   variable phonebook
+  variable localIn
+  variable localOut
 
   signal trap * {::vmodem::finish}
   set config [config::load]
@@ -113,24 +152,8 @@ proc vmodem::main {commandLineArgs} {
     }
   }
 
-  if {[dict exists $params p] && $p} {
-    lassign [pty::open] masterIO slavePTYName
-    puts "Using pseudo TTY device: $slavePTYName"
-    logger::log info "Using pseudo TTY device: $slavePTYName"
-    set modem [Modem new $config $phonebook $masterIO $masterIO]
-  } elseif {[dict exists $params s] && $s} {
-    set serial_device [dict get $config serial_device]
-    dict with serial_device {
-      set serialIO [open $name r+]
-      fconfigure $serialIO -mode $baud,$parity,$data_bits,$stop_bits \
-                           -handshake $handshake
-      puts "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
-      logger::log info "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
-      set modem [Modem new $config $phonebook $serialIO $serialIO]
-    }
-  } else {
-    set modem [Modem new $config $phonebook stdin stdout]
-  }
+  lassign [getLocalIO $config] localIn localOut
+  set modem [Modem new $config $phonebook $localIn $localOut]
   $modem on
 }
 
