@@ -115,10 +115,10 @@ proc vmodem::getLocalIO {config} {
       set serial_device [dict get $config serial_device]
       dict with serial_device {
         set serialIO [open $name r+]
-        fconfigure $serialIO -mode $baud,$parity,$data_bits,$stop_bits \
+        fconfigure $serialIO -mode $speed,$parity,$data_bits,$stop_bits \
                              -handshake $handshake
-        puts "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
-        logger::log info "Using serial device: $name configured as: $baud,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+        puts "Using serial device: $name configured as: $speed,$data_bits,$parity,$stop_bits - handshaking: $handshake"
+        logger::log info "Using serial device: $name configured as: $speed,$data_bits,$parity,$stop_bits - handshaking: $handshake"
         return [list $serialIO $serialIO]
       }
     }

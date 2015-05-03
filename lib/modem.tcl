@@ -64,7 +64,8 @@ source [file join $LibDir telnet.tcl]
       chan event $localInChannel \
                  readable \
                  [list ${selfObject}::my ReceiveFromLocal]
-      dict with config {
+
+      dict with config inbound {
         set transports [
           dict create \
             telnet [Telnet new $ring_on_connect \
@@ -95,12 +96,10 @@ source [file join $LibDir telnet.tcl]
 
 
   method listen {} {
-    dict with config {
+    dict with config inbound {
       if {$auto_answer} {
-        if {$incoming_type eq "telnet" || $incoming_type eq "rawtcp"} {
-          set currentTransport [dict get $transports $incoming_type]
-          $currentTransport listen $incoming_port
-        }
+        set currentTransport [dict get $transports $type]
+        $currentTransport listen $port
       }
     }
   }
@@ -120,13 +119,13 @@ source [file join $LibDir telnet.tcl]
 
 
   method hasRemoteEvent {} {
-    if {$mode eq "off"} {return}
+    if {$mode eq "off" || $currentTransport eq {}} {return}
 
     while {[set localData [$currentTransport getDataForLocal]] ne {}} {
       my sendToLocal $localData
     }
-
-    while {[set message [$currentTransport getMessage]] ne {}} {
+    while {$currentTransport ne {} &&
+           [set message [$currentTransport getMessage]] ne {}} {
       switch $message {
         connected {
           my changeMode "on-line"
@@ -193,7 +192,7 @@ source [file join $LibDir telnet.tcl]
   # Internal Commands
   ########################
   method ResetSpeed {} {
-    set speed [dict get $config incoming_speed]
+    set speed [dict get $config inbound speed]
   }
 
 
@@ -232,8 +231,8 @@ source [file join $LibDir telnet.tcl]
         }
         {(?i)^at\s*a} {
           my sendToLocal "OK\r\n"
-          set incomingType [dict get $config incoming_type]
-          set currentTransport [dict get $transports $incomingType]
+          set inboundType [dict get $config inbound type]
+          set currentTransport [dict get $transports $inboundType]
           $currentTransport completeInbondConnection
           my changeMode "command"
         }
