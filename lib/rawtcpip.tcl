@@ -100,7 +100,7 @@ package require TclOO
             logMsg
 
     my SendData $dataToSend
-    logger::log -noheader $logMsg
+    logger::log -noheader debug $logMsg
   }
 
 
@@ -135,14 +135,14 @@ package require TclOO
     }
 
     set bytesIn [split $dataIn {}]
-    logger::eval info {
+    logger::eval debug {
       set numBytes [llength $bytesIn]
       if {$numBytes > 0} {
         set msg "remote > local: length $numBytes"
       }
     }
 
-    logger::eval -noheader {
+    logger::eval -noheader debug {
       ::logger::dumpBytes $bytesIn
     }
 
@@ -166,8 +166,8 @@ package require TclOO
       return
     }
 
-    logger::log info "local > remote: length $numBytes"
-    logger::eval -noheader {::logger::dumpBytes $bytesOut}
+    logger::log debug "local > remote: length $numBytes"
+    logger::eval -noheader debug {::logger::dumpBytes $bytesOut}
 
     if {[catch {puts -nonewline $remoteChannel $dataOut}]} {
       my close

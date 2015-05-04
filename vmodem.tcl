@@ -56,6 +56,7 @@ proc vmodem::loadPhonebook {config {phonebookFilename {}}} {
 proc vmodem::handleParameters {parameters} {
   set options {
     {log.arg "" {Log information to supplied filename}}
+    {d {Include debug information in log}}
     {pb.arg "" {Phonebook filename}}
     {c.arg "" {Config filename}}
   }
@@ -142,6 +143,10 @@ proc vmodem::main {commandLineArgs} {
   dict with params {
     if {$log ne ""} {
       logger::init $log
+    }
+
+    if {!$d} {
+      logger::supressLevel debug
     }
 
     if {$c eq ""} {

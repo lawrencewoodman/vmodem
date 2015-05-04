@@ -123,7 +123,7 @@ package require TclOO
     if {$telnetCommandInLength > 1} {
       set byte2 [lindex $telnetCommandIn 1]
       if {$byte2 == $IAC} {
-        logger::log -noheader "    Telnet command: $humanReadableCommand"
+        logger::log -noheader debug "    Telnet command: $humanReadableCommand"
         # IAC escapes IAC, so if you want to send or receive 255 then you need to
         # send IAC twice
         set binaryIAC [binary format c $IAC]
@@ -131,7 +131,9 @@ package require TclOO
         set telnetCommandIn [list]
       } elseif {$byte2 in $commandCodes} {
         if {$telnetCommandInLength == 3} {
-          logger::log -noheader "    Telnet command: $humanReadableCommand"
+          logger::log -noheader \
+                      debug \
+                      "    Telnet command: $humanReadableCommand"
           set option [lindex $telnetCommandIn 2]
           my NegotiateTelnetOptions $byte2 $option
           set telnetCommandIn [list]
@@ -158,7 +160,7 @@ package require TclOO
     my SendData [join $bytesToSend {}]
 
     if {$logMsg ne ""} {
-      logger::log -noheader [string trimright $logMsg]
+      logger::log -noheader debug [string trimright $logMsg]
     }
 
     set telnetCommandsOut [list]

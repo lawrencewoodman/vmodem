@@ -216,9 +216,9 @@ source [file join $LibDir telnet.tcl]
     if {$line ne ""} {
       my sendToLocal "\r\n"
 
-      logger::eval info {
+      logger::eval debug {
         set bytes [split $line {}]
-        set msg "Received line:\n[::logger::dumpBytes $bytes]"
+        set msg "Received command:\n[::logger::dumpBytes $bytes]"
       }
       switch -regexp $line {
         {(?i)^at\s*d(t|p).*$} {
@@ -347,7 +347,7 @@ source [file join $LibDir telnet.tcl]
       if {[string length $escapeBuffer] >= 3} {
         set escapeBuffer ""
         set receivedEscapeCode 1
-        logger::log info "Received escape code +++"
+        logger::log debug "Received escape code +++"
         my changeMode "command"
         set dataFromLocal $dataLeft
       } elseif {$dataLeft ne ""} {

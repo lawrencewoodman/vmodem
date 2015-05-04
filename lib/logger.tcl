@@ -11,6 +11,7 @@ namespace eval logger {
   variable active 0
   variable lastLevel
   variable lastMsg
+  variable supressedLevels {}
 }
 
 
@@ -30,6 +31,24 @@ proc logger::init {filename} {
 }
 
 
+proc logger::supressLevel {level {supress 1}} {
+  variable supressedLevels
+
+  if {![IsValidLevel $level]} {
+    return -code error "invalid level: $level"
+  }
+
+  set i [lsearch $supressedLevels $level]
+  if {$supress} {
+    if {$i == -1} {lappend supressedLevels $level}
+  } else {
+    if {$i != -1} {
+      set supressedLevels [lreplace $supressedLevels $i $i]
+    }
+  }
+}
+
+
 proc logger::close {} {
   variable logFID
   variable active
@@ -44,6 +63,7 @@ proc logger::log {args} {
   variable active
   variable lastLevel
   variable lastMsg
+  variable supressedLevels
 
   if {!$active} {return}
 
@@ -54,19 +74,18 @@ proc logger::log {args} {
   set usage ": log \[options] \[level] msg\noptions:"
   set params [::cmdline::getoptions args $options $usage]
 
-  switch [llength $args] {
-    1 {
-      lassign $args msg
-      set level info
-    }
-    2 {
-      lassign $args level msg
-    }
-    - {
-      puts stderr "Error: Wrong number of arguments"
-      ::cmdline::usage $options $usage
-    }
+  if {[llength $args] != 2} {
+    puts stderr "Error: Wrong number of arguments"
+    return -code error [::cmdline::usage $options $usage]
   }
+
+  lassign $args level msg
+  if {![IsValidLevel $level]} {
+    return -code error "invalid level: $level"
+  }
+
+  if {$level in $supressedLevels} {return}
+
 
   if {$level in {error critical} && $lastLevel eq $level && $lastMsg eq $msg} {
     return
@@ -174,4 +193,10 @@ proc logger::DumpASCIIBytes {bytes} {
   }
 
   return $dump
+}
+
+
+proc logger::IsValidLevel {level} {
+  set validLevels {debug info notice error critical}
+  exp {$level in $validLevels}
 }
