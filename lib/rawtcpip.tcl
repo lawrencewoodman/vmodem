@@ -7,7 +7,7 @@
 #
 package require TclOO
 
-::oo::class create RawTcp {
+::oo::class create RawTcpip {
   variable state
   variable messages
   variable remoteChannel
@@ -31,7 +31,7 @@ package require TclOO
 
 
   method listen {port} {
-    my ListenWithLogMsg $port "Listening for raw connection on port: $port"
+    my ListenWithLogMsg $port "Listening for raw tcp/ip connection on port: $port"
   }
 
 

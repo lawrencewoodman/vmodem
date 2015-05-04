@@ -10,7 +10,7 @@
 package require TclOO
 
 ::oo::class create Telnet {
-  superclass RawTcp
+  superclass RawTcpip
   variable telnetCommandIn telnetCommandsOut
 
   constructor {_ringOnConnect _waitForAta {_eventNotifyScript {}}} {

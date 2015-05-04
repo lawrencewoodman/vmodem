@@ -9,12 +9,12 @@ set LibDir [file normalize [file join $ThisScriptDir .. lib]]
 source [file join $ThisScriptDir "test_helpers.tcl"]
 source [file join $ThisScriptDir "chatter.tcl"]
 source [file join $LibDir "logger.tcl"]
-source [file join $LibDir "rawtcp.tcl"]
+source [file join $LibDir "rawtcpip.tcl"]
 
 
 test connect-1 {Reports as connected when connected} -setup {
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new 0 0]
+  set rawTcp [RawTcpip new 0 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "connecting"}
@@ -33,7 +33,7 @@ test connect-1 {Reports as connected when connected} -setup {
 
 test connect-2 {Reports failed to connect when failed to connect} -setup {
   set unusedPort [testHelpers::findUnusedPort]
-  set rawTcp [RawTcp new 0 0]
+  set rawTcp [RawTcpip new 0 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "connecting"}
@@ -49,7 +49,7 @@ test connect-2 {Reports failed to connect when failed to connect} -setup {
 
 test connect-3 {Check can send and receive data} -setup {
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new 0 0]
+  set rawTcp [RawTcpip new 0 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "connecting"}
@@ -74,7 +74,7 @@ test connect-3 {Check can send and receive data} -setup {
 
 test connect-4 {Check detects when remote connection has dropped and reports it} -setup {
   set echoPort [testHelpers::listen]
-  set rawTcp [RawTcp new 0 0]
+  set rawTcp [RawTcpip new 0 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "connecting"}
@@ -93,7 +93,7 @@ test connect-4 {Check detects when remote connection has dropped and reports it}
 
 
 test listen-1 {Reports as connected when local in bound connection made} -setup {
-  set rawTcp [RawTcp new 0 0]
+  set rawTcp [RawTcpip new 0 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "connecting"}
@@ -116,7 +116,7 @@ test listen-1 {Reports as connected when local in bound connection made} -setup 
 
 
 test listen-2 {Reports as ringing when receives connection if requested} -setup {
-  set rawTcp [RawTcp new 1 0]
+  set rawTcp [RawTcpip new 1 0]
   chatter::init $rawTcp
   set chatScript {
     {getMessage "ringing"}

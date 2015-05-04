@@ -7,7 +7,7 @@
 #
 
 set LibDir [file dirname [info script]]
-source [file join $LibDir rawtcp.tcl]
+source [file join $LibDir rawtcpip.tcl]
 source [file join $LibDir telnet.tcl]
 
 
@@ -71,9 +71,9 @@ source [file join $LibDir telnet.tcl]
             telnet [Telnet new $ring_on_connect \
                                $wait_for_ata \
                                [list ${selfObject}::my hasRemoteEvent]] \
-            rawtcp [RawTcp new $ring_on_connect \
-                               $wait_for_ata \
-                               [list ${selfObject}::my hasRemoteEvent]] \
+            rawtcpip [RawTcpip new $ring_on_connect \
+                                   $wait_for_ata \
+                                   [list ${selfObject}::my hasRemoteEvent]] \
         ]
       }
 

@@ -19,7 +19,7 @@ test on-1 {Outputs OK message to local when an AT command is given} -setup {
       ring_on_connect 0
       wait_for_ata 0
       auto_answer 0
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -49,7 +49,7 @@ test on-2 {Recognize +++ and escape to command mode for inbound connection} -set
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -86,7 +86,7 @@ test on-3 {Ensure can resume a connect with ato from command mode} -setup {
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -131,7 +131,7 @@ test on-4 {Check will accept another inbound connection once one finished} -setu
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -172,7 +172,7 @@ test on-5 {Check will only accept one inbound connection at a time} -setup {
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -205,7 +205,7 @@ test on-6 {Check can use ATDT to make an outbound connection} -setup {
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {
@@ -245,7 +245,7 @@ test on-7 {Check won't accept inbound connection if making an outbound connectio
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {
@@ -286,7 +286,7 @@ test on-8 {Check can use ATDT via a phonebook} -setup {
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 0
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {
@@ -331,7 +331,7 @@ test on-9 {Check when using ATDT that name is looked up in phonebook, instead of
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 0
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {
@@ -376,7 +376,7 @@ test on-10 {Check when using ATDT that if name is not in phonebook and not a val
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 0
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -405,7 +405,7 @@ test on-11 {Check will use incoming->speed from config for an incoming connectio
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 9600
     }
   }
@@ -435,7 +435,7 @@ test on-12 {Check will use the default outbound speed from config for an outgoin
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {
@@ -473,7 +473,7 @@ test on-13 {Recognize +++ath0 and escape to command mode when sequence joined fo
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
   }
@@ -508,7 +508,7 @@ test on-14 {Check will recognize +++ and escape to command mode for an outbound 
       ring_on_connect 1
       wait_for_ata 0
       auto_answer 1
-      type rawtcp
+      type rawtcpip
       speed 1200
     }
     outbound_defaults {

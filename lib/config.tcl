@@ -68,7 +68,7 @@ proc config::ParseConfig {configContents} {
       port 1 "The port to accept inbound connections on"
     }
     type {
-      type 1 "The type of inbound connection: telnet|rawtcp"
+      type 1 "The type of inbound connection: telnet|rawtcpip"
     }
     speed {
       speed 1 "The speed of inbound connections"
@@ -93,7 +93,7 @@ proc config::ParseConfig {configContents} {
       port 1 "The default port to make outbound connections to"
     }
     type {
-      type 1 "The default type of outbound connection: telnet|rawtcp"
+      type 1 "The default type of outbound connection: telnet|rawtcpip"
     }
     speed {
       speed 1 "The default speed for outbound connections"
@@ -167,7 +167,7 @@ proc config::IsConfigValid {config} {
 proc config::IsInboundValid {config} {
   set inbound [dict get $config inbound]
   set specificValueFields {
-    type {telnet rawtcp}
+    type {telnet rawtcpip}
     auto_answer {1 0}
     ring_on_connect {1 0}
     wait_for_ata {1 0}
@@ -191,7 +191,7 @@ proc config::IsInboundValid {config} {
 
 proc config::IsOutbound_defaultsValid {config} {
   set specificValueFields {
-    type {telnet rawtcp}
+    type {telnet rawtcpip}
   }
   set integerFields {port speed}
   set outbound_defaults [dict get $config outbound_defaults]

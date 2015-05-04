@@ -9,7 +9,7 @@ set LibDir [file normalize [file join $ThisScriptDir .. lib]]
 source [file join $ThisScriptDir "test_helpers.tcl"]
 source [file join $ThisScriptDir "chatter.tcl"]
 source [file join $LibDir "logger.tcl"]
-source [file join $LibDir "rawtcp.tcl"]
+source [file join $LibDir "rawtcpip.tcl"]
 source [file join $LibDir "telnet.tcl"]
 
 
