@@ -219,9 +219,9 @@ package require TclOO
     }
 
     if {$waitForAta} {
-      logger::log info "Recevied connection from: $addr, waiting for ATA"
+      logger::log info "Received connection from: $addr, waiting for ATA"
     } else {
-      logger::log info "Recevied connection from: $addr"
+      logger::log info "Received connection from: $addr"
       my completeInbondConnection
     }
   }
