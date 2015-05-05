@@ -105,11 +105,6 @@ source [file join $LibDir telnet.tcl]
   }
 
 
-  method ring {} {
-    my sendToLocal "RING\r\n"
-  }
-
-
   method changeMode {newMode} {
     if {$mode ne $newMode} {
       logger::log info "Entering $newMode mode"
