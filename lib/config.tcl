@@ -62,7 +62,7 @@ proc config::ParseConfig {configContents} {
       log 1 "Settings for logging"
     }
     local_io {
-      local_io 1 "Type of local input/output: stdio|pseudo|serial"
+      local_io 1 "Type of local input/output: stdio|pty|serial"
     }
   }
 
@@ -166,7 +166,7 @@ proc config::ParseConfig {configContents} {
 
 proc config::IsConfigValid {config} {
   set specificValueFields {
-    local_io {stdio pseudo serial}
+    local_io {stdio pty serial}
   }
 
   lassign [HaveSpecificValues $specificValueFields $config] \

@@ -95,10 +95,10 @@ proc vmodem::getLocalIO {config} {
       return {stdin stdout}
     }
 
-    pseudo {
+    pty {
       if {[info commands "::pty::open"] eq {}} {
         return -code error \
-               "pty package not loaded, so local_io can't be pseudo in config"
+               "pty package not loaded, so local_io can't be pty in config"
       }
       lassign [pty::open] masterIO slavePTYName
       puts "Using pseudo TTY device: $slavePTYName"
