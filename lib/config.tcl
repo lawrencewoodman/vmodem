@@ -58,6 +58,9 @@ proc config::ParseConfig {configContents} {
     serial_device {
      serial_device 1 "A serial device for local input/output"
     }
+    log {
+      log 1 "Settings for logging"
+    }
     local_io {
       local_io 1 "Type of local input/output: stdio|pseudo|serial"
     }
@@ -121,10 +124,23 @@ proc config::ParseConfig {configContents} {
     }
   }
 
+  set logKeys {
+    filename {
+      filename 1 "The name of a file to log to"
+    }
+    output_method {
+      output_method 1 "The output method: stdout|file|none"
+    }
+    debug {
+      debug 1 "Whether to include debugging informatin: 1|0"
+    }
+  }
+
   set config [configurator::parseConfig -keys $rootKeys $configContents]
   set inbound [dict get $config inbound]
   set outbound_defaults [dict get $config outbound_defaults]
   set serial_device [dict get $config serial_device]
+  set log [dict get $config log]
 
   dict set config inbound [
     configurator::parseConfig -keys $inboundKeys $inbound
@@ -134,6 +150,9 @@ proc config::ParseConfig {configContents} {
   ]
   dict set config serial_device [
     configurator::parseConfig -keys $serial_deviceKeys $serial_device
+  ]
+  dict set config log [
+    configurator::parseConfig -keys $logKeys $log
   ]
 
   lassign [IsConfigValid $config] isValidConfig notValidMsg
@@ -158,6 +177,8 @@ proc config::IsConfigValid {config} {
   lassign [IsInboundValid $config] isValid notValidMsg
   if {!$isValid} {return [list 0 $notValidMsg]}
   lassign [IsOutbound_defaultsValid $config] isValid notValidMsg
+  if {!$isValid} {return [list 0 $notValidMsg]}
+  lassign [IsLogValid $config] isValid notValidMsg
   if {!$isValid} {return [list 0 $notValidMsg]}
 
   return {1 {}}
@@ -230,6 +251,23 @@ proc config::IsSerialDeviceValid {config} {
   lassign [AreIntegers $integerFields $serial_device] isValid notValidMsg
   if {!$isValid} {
     return [list 0 "In serial_device: $notValidMsg"]
+  }
+
+  return {1 {}}
+}
+
+
+proc config::IsLogValid {config} {
+  set log [dict get $config log]
+  set specificValueFields {
+    output_method {stdout file none}
+    debug {1 0}
+  }
+
+  lassign [HaveSpecificValues $specificValueFields $log] \
+          isValid notValidMsg
+  if {!$isValid} {
+    return [list 0 "In log: $notValidMsg"]
   }
 
   return {1 {}}

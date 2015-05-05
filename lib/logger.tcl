@@ -15,14 +15,18 @@ namespace eval logger {
 }
 
 
-proc logger::init {filename} {
+proc logger::init {{filename {}}} {
   variable logFID
   variable active
   variable lastLevel
   variable lastMsg
 
-  if {[catch {open $filename a} logFID]} {
-    error "Couldn't open $filename for logging"
+  if {$filename eq {}} {
+    set logFID stdout
+  } else {
+    if {[catch {open $filename a} logFID]} {
+      error "Couldn't open $filename for logging"
+    }
   }
 
   set active 1
